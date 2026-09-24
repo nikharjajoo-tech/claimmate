@@ -151,6 +151,7 @@ def evaluate(
     policy: PolicyLookup,
     captures: list[EvidenceCapture] | None = None,
     *,
+    escalations: list[str] | None = None,
     today: date | None = None,
     config: RulesConfig | None = None,
 ) -> Decision:
@@ -180,6 +181,10 @@ def evaluate(
     for fact in facts.safety_facts:
         if fact.status in ("present", "uncertain"):
             add("SAFE-001", Severity.URGENT, Action.EMERGENCY_ESCALATION, f"{fact.category} ({fact.status}): {fact.description}")
+
+    # The live agent can request escalation; it still goes through the engine and the audit trail.
+    for reason in escalations or []:
+        add("AGENT-001", Severity.URGENT, Action.EMERGENCY_ESCALATION, f"Live agent escalated: {reason}")
 
     # Policy verification (skipped while the number is simply missing; INTAKE-001 covers that)
     if not is_blank(facts.policy_number):

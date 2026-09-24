@@ -5,7 +5,8 @@
     python -m app.eval --category safety_escalation,negation_trap
     python -m app.eval --only hp-01,sf-01
     python -m app.eval --resume eval/results/20260924-1530   # finish an interrupted run
-    python -m app.eval --models gemini-3-flash-preview   # pin one model for comparable metrics
+    python -m app.eval --provider groq --models openai/gpt-oss-120b   # benchmark one model
+    python -m app.eval --provider gemini --models gemini-3-flash-preview
     python -m app.eval --check                  # exit 1 if a PRD target is missed (for CI)
 
 Writes results.jsonl (one line per scenario, appended as each finishes), summary.json, and
@@ -27,7 +28,8 @@ from app.config import get_settings
 from app.eval.report import check_targets, compute_metrics, render_markdown
 from app.eval.runner import PacedLLM, ScenarioResult, load_results, run_eval
 from app.eval.scenario import load_scenarios
-from app.llm.client import GeminiLLM, LLMError
+from app.llm.client import LLMError
+from app.llm.factory import make_pipeline_llm
 
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "eval" / "results"
 
@@ -44,7 +46,8 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=2, help="scenarios in flight at once (default 2)")
     parser.add_argument("--min-interval", type=float, default=4.0, help="seconds between LLM call starts (default 4)")
     parser.add_argument("--resume", type=Path, help="existing results directory; skips scenarios already scored")
-    parser.add_argument("--models", help="comma-separated model chain for this run (default: from .env); "
+    parser.add_argument("--provider", choices=["groq", "gemini"], help="benchmark one provider (default: from .env)")
+    parser.add_argument("--models", help="comma-separated model chain for the provider (default: from .env); "
                         "pin a single model so every scenario is scored against the same one")
     parser.add_argument("--check", action="store_true", help="exit 1 if any PRD target is missed")
     args = parser.parse_args()
@@ -71,11 +74,24 @@ def main() -> int:
     todo = [s for s in scenarios if s.id not in previous]
 
     settings = get_settings()
+    if args.provider:
+        settings = replace(settings, pipeline_provider=args.provider)
     if args.models:
-        first, *rest = [m.strip() for m in args.models.split(",") if m.strip()]
-        settings = replace(settings, extract_model=first, fallback_models=tuple(rest))
+        models = [m.strip() for m in args.models.split(",") if m.strip()]
+        if settings.pipeline_provider == "groq":
+            settings = replace(settings, groq_models=tuple(models))
+        else:
+            settings = replace(settings, extract_model=models[0], fallback_models=tuple(models[1:]))
+    chain = {
+        "groq": [f"groq:{m}" for m in settings.groq_models],
+        "gemini": settings.model_chain,
+    }
+    if settings.pipeline_provider in chain:
+        model_desc = " -> ".join(chain[settings.pipeline_provider])
+    else:
+        model_desc = " -> ".join((chain["groq"] if settings.groq_api_key else []) + (chain["gemini"] if settings.has_api_key else []))
     print(f"{len(scenarios)} scenarios ({len(previous)} already done, {len(todo)} to run) -> {out_dir}")
-    print(f"models: {' -> '.join(settings.model_chain)} | concurrency {args.concurrency} | "
+    print(f"models: {model_desc} | concurrency {args.concurrency} | "
           f"min interval {args.min_interval}s")
 
     done = 0
@@ -91,7 +107,7 @@ def main() -> int:
 
     if todo:
         try:
-            llm = PacedLLM(GeminiLLM(settings), args.min_interval)
+            llm = PacedLLM(make_pipeline_llm(settings), args.min_interval)
         except LLMError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -105,7 +121,7 @@ def main() -> int:
     metrics = compute_metrics(results)
     meta = {
         "Run": out_dir.name,
-        "Models": " -> ".join(settings.model_chain),
+        "Models": model_desc,
         "Reference date": str(scenarios[0].today) if scenarios else "n/a",
     }
     (out_dir / "report.md").write_text(render_markdown(metrics, results, meta))

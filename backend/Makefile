@@ -1,4 +1,4 @@
-.PHONY: install test eval eval-smoke
+.PHONY: install test eval eval-smoke serve
 
 PY := .venv/bin/python
 
@@ -13,3 +13,6 @@ eval-smoke:
 
 eval:
 	$(PY) -m app.eval $(ARGS)
+
+serve:
+	$(PY) -m uvicorn app.api.main:app --reload --port 8000

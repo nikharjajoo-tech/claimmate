@@ -232,3 +232,13 @@ def test_next_question_asks_for_first_pending_document():
 def test_next_question_when_everything_is_collected():
     decision = run(home_facts(), captures=captures_for(*ALL_HOME_DOCS))
     assert next_question(decision).startswith("I have what I need")
+
+
+def test_agent_escalation_goes_through_rules_and_audit():
+    decision = evaluate(
+        home_facts(), HOME, lookup_policy("HO-20417"), captures_for(*ALL_HOME_DOCS),
+        escalations=["claimant says the ceiling is sagging"], today=TODAY,
+    )
+    assert decision.route == Route.EMERGENCY_ESCALATION
+    assert "AGENT-001" in rule_ids(decision)
+    assert any("AGENT-001" in line for line in decision.audit_trail)

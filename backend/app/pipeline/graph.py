@@ -31,6 +31,7 @@ class ClaimState(TypedDict, total=False):
     turns: list[Turn]
     observations: list[str]
     captures: list[EvidenceCapture]
+    escalations: list[str]
     today: date
     # Node outputs
     facts: ClaimFacts
@@ -102,7 +103,12 @@ def build_graph(llm: StructuredLLM):
 
     async def evaluate_rules(state: ClaimState) -> dict[str, Any]:
         decision = evaluate(
-            state["facts"], state["classification"], state["policy"], state.get("captures", []), today=state["today"]
+            state["facts"],
+            state["classification"],
+            state["policy"],
+            state.get("captures", []),
+            escalations=state.get("escalations", []),
+            today=state["today"],
         )
         return {"decision": decision}
 
@@ -139,6 +145,7 @@ async def run_pipeline(
     *,
     observations: list[str] | None = None,
     captures: list[EvidenceCapture] | None = None,
+    escalations: list[str] | None = None,
     today: date | None = None,
     graph: Any = None,
 ) -> PipelineResult:
@@ -149,6 +156,7 @@ async def run_pipeline(
             "turns": turns,
             "observations": observations or [],
             "captures": captures or [],
+            "escalations": escalations or [],
             "today": today or date.today(),
             "llm_calls": [],
             "node_ms": [],

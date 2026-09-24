@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Owner** | Nikhar |
-| **Status** | In development (M1–M2 complete) |
+| **Status** | In development (M1–M4 complete) |
 | **Last updated** | 2026-09-24 |
 | **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) |
 
@@ -115,8 +115,8 @@ Priority: **P0** = required for MVP demo · **P1** = required for v1 · **P2** =
 | F2 | Deterministic rules engine (YAML config, rule IDs, route precedence, audit trail) | P0 | M1 ✅ |
 | F3 | Claim pipeline: extract → classify ∥ policy lookup → rules → packet (LangGraph) | P0 | M2 ✅ |
 | F4 | Eval harness: 50 labeled scenarios, self-checking labels, metrics report | P0 | M3 ✅ |
-| F5 | Live voice session (Gemini Live), barge-in, transcripts, typed fallback | P0 | M4 |
-| F6 | Non-blocking background tools with interrupt/idle scheduling | P0 | M4 |
+| F5 | Live voice session (Gemini Live), barge-in, transcripts, typed fallback | P0 | M4 ✅ |
+| F6 | Non-blocking background tools with interrupt/idle scheduling | P0 | M4 ✅ |
 | F7 | Camera evidence capture with independent verification | P1 | M5 |
 | F8 | Persistent storage (claims, turns, evidence, audit) | P1 | M6 |
 | F9 | Adjuster dashboard: queue, detail view, route override | P1 | M6 |
@@ -263,8 +263,8 @@ SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest 
 | M1 | Domain core | Models, policy store, rules engine, 37 tests | ✅ Done |
 | M2 | Claim pipeline | LangGraph graph, Gemini client with retry, fallback chain + circuit breaker, packet builder, CLI; 53 tests | ✅ Done |
 | M3 | Eval harness | 50 labeled scenarios in 9 categories, label consistency checks, oracle test, report + targets; 173 tests. Full baseline run pending free-tier quota | ✅ Built |
-| M4 | Live voice | WebSocket relay, Gemini Live, tools, claimant UI | 🔄 Next |
-| M5 | Camera evidence | Capture, verification, storage | ⏳ |
+| M4 | Live voice | WebSocket relay to Gemini Live, 3 non-blocking tools, revision-cached sessions, typed mode, Groq pipeline provider, React call page; 215 backend + 15 frontend tests; verified end to end against real Gemini Live (first audio 1.5–2.1 s) | ✅ Done |
+| M5 | Camera evidence | Capture, verification, storage | 🔄 Next |
 | M6 | Persistence + dashboard | DB, adjuster queue/detail/override | ⏳ |
 | M7 | Hardening + ship | Security, observability, Docker, CI, README + demo video | ⏳ |
 

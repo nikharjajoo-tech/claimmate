@@ -16,7 +16,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from app.llm.client import GeminiLLM, LLMError
+from app.llm.client import LLMError
+from app.llm.factory import make_pipeline_llm
 from app.pipeline.graph import PipelineResult, run_pipeline
 from app.pipeline.prompts import Turn
 
@@ -73,7 +74,7 @@ def main() -> int:
 
     turns = parse_transcript(args.transcript.read_text())
     try:
-        result = asyncio.run(run_pipeline(GeminiLLM(), turns, today=args.today))
+        result = asyncio.run(run_pipeline(make_pipeline_llm(), turns, today=args.today))
     except LLMError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
