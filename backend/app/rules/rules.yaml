@@ -1,0 +1,55 @@
+# Intake rules. Every decision the engine makes traces back to a rule ID here or in engine.py.
+
+thresholds:
+  high_loss_usd: 25000          # LOSS-001: prompt human adjuster review
+  unsupported_loss_usd: 10000   # EVID-001: SIU if no evidence is available at all
+  late_report_days: 90          # TIMING-002: SIU if reported this long after the loss
+
+# Required intake fields, in the order the agent should ask for them.
+required_fields:
+  policyholder_name: What is your full name as it appears on the policy?
+  policy_number: What is your policy number? It's on your ID card or renewal notice.
+  contact: What's the best phone number or email for the adjuster to reach you?
+  date_of_loss: What date did this happen?
+  loss_location: Where did this happen?
+  loss_description: Can you briefly describe what happened?
+
+documents:
+  home_water_damage:
+    - {type: damage_photo, label: Photos of damaged areas before cleanup, reason: Documents the loss condition.}
+    - {type: mitigation_invoice, label: Water mitigation or drying invoice, reason: Shows steps taken to prevent further damage.}
+    - {type: repair_estimate, label: Repair estimate or contractor assessment, reason: Supports the repair cost.}
+  auto_collision:
+    - {type: damage_photo, label: Photos of vehicles and scene, reason: Documents impact and visible damage.}
+    - {type: police_report, label: Police report or exchange form, reason: Confirms crash facts and parties.}
+    - {type: repair_estimate, label: Repair estimate or tow invoice, reason: Supports vehicle damage costs.}
+    - {type: witness_details, label: Other driver and witness details, reason: Needed for liability review.}
+  theft_property_loss:
+    - {type: police_report, label: Police report number, reason: Theft claims require a filed report.}
+    - {type: ownership_proof, label: Receipts, serial numbers, or ownership proof, reason: Supports ownership and value.}
+  travel_disruption:
+    - {type: carrier_notice, label: Carrier cancellation or delay notice, reason: Confirms the disruption.}
+    - {type: itinerary, label: Original itinerary and booking confirmation, reason: Shows trip dates and route.}
+    - {type: expense_receipt, label: Receipts for prepaid nonrefundable expenses, reason: Supports the claimed amount.}
+    - {type: refund_document, label: Refund, voucher, or credit documentation, reason: Prevents duplicate recovery.}
+  medical_reimbursement:
+    - {type: medical_bill, label: Itemized provider bill, reason: Shows services, dates, and charges.}
+    - {type: explanation_of_benefits, label: Explanation of benefits, reason: Shows what primary coverage paid.}
+    - {type: payment_proof, label: Proof of payment, reason: Supports the reimbursement amount.}
+  other:
+    - {type: damage_photo, label: Photos or other proof of loss, reason: Documents what happened.}
+    - {type: other_proof, label: Receipts, estimates, or third-party reports, reason: Supports the claimed amount.}
+
+coverage_notes:
+  home_water_damage:
+    - Review depends on water source, suddenness, mitigation, and whether flood is excluded or separately covered.
+  auto_collision:
+    - Review depends on liability facts, coverage type, deductible, police report, and damage estimate.
+  theft_property_loss:
+    - Review requires ownership proof and a police report; high-value items may have sublimits.
+  travel_disruption:
+    - Review depends on the covered reason, carrier confirmation, and refunds already received.
+  medical_reimbursement:
+    - Review depends on plan terms, dates of service, itemized bills, and EOBs. No medical or benefits advice is given.
+  other:
+    - Claim type is unclear; route for human triage once minimum loss facts are collected.
