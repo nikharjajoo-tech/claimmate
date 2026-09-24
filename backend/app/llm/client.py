@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-RETRYABLE_CODES = {429, 500, 502, 503, 504}
-MODEL_UNAVAILABLE_CODES = {404}  # Model ID not served for this key: skip it without retrying.
+RETRYABLE_CODES = {500, 502, 503, 504}
+# Skip to the next model without retrying: 404 = model not served for this key,
+# 429 = quota exhausted (free tier is per model per day, so a quick retry cannot succeed).
+SKIP_MODEL_CODES = {404, 429}
 
 
 class LLMCall(BaseModel):
@@ -132,8 +134,8 @@ class GeminiLLM:
                 except Exception as exc:
                     code = _error_code(exc)
                     last_error = exc
-                    if code in MODEL_UNAVAILABLE_CODES:
-                        logger.warning("%s: model %s not available for this key", step, model)
+                    if code in SKIP_MODEL_CODES:
+                        logger.warning("%s: HTTP %s on %s, skipping to next model", step, code, model)
                         break
                     if code not in RETRYABLE_CODES:
                         raise LLMError(f"{step} failed on {model}: {exc}") from exc

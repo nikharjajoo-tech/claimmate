@@ -43,9 +43,12 @@ Grounding
 - A hypothetical question, an inspection, or an undamaged item is not a loss.
 
 Fields
-- date_of_loss / reported_date: a single calendar date as YYYY-MM-DD. Resolve "yesterday" or
-  "last Tuesday" using the reference date. If the claimant gives a range or is unsure, keep
-  "not specified" and list it in uncertain_facts.
+- date_of_loss: a single calendar date as YYYY-MM-DD. Resolve "yesterday" or "last Tuesday"
+  using the reference date. If the claimant gives a range or is unsure, keep "not specified"
+  and list it in uncertain_facts.
+- reported_date: only when the claimant says they already reported this loss earlier on a
+  specific date ("I reported it on the 10th"). This conversation is not a report date; leave
+  "not specified" otherwise.
 - contact: phone, email, or address the claimant gives for follow-up.
 - estimated_loss_usd: a number only if the claimant states an amount or estimate.
 - parties_involved: other people or organizations involved (other driver, landlord, airline).

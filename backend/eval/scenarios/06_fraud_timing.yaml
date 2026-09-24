@@ -1,0 +1,111 @@
+# Timing anomalies and unsupported large losses route to special investigation (SIU).
+category: fraud_timing
+scenarios:
+  - id: si-01
+    title: Water loss reported 137 days late
+    tags: [home, late_report]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. Back on May 10th our Denver basement took on water from a cracked window well. I kept meaning to call."
+      - agent: "Thanks for letting us know. Anyone hurt?"
+      - claimant: "No. I have photos from back then. 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: special_investigation
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-05-10"
+        loss_location: Denver
+        loss_description: Basement took on water from a cracked window well.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_fired: [TIMING-002]
+
+  - id: si-02
+    title: Totaled car, large loss, no evidence at all
+    tags: [auto, unsupported_loss]
+    turns:
+      - claimant: "Omar Haddad, AU-66001. My car was totaled on the 20th on a back road outside Chicago. It's worth about 32,000 dollars."
+      - agent: "I'm sorry. Is anyone hurt? Do you have photos or a police report?"
+      - claimant: "Nobody got hurt. I didn't take any photos and I didn't call the police. The car's already been hauled away. 312-555-0110."
+    expected:
+      claim_type: auto_collision
+      route: special_investigation
+      facts:
+        policyholder_name: Omar Haddad
+        policy_number: AU-66001
+        contact: "312-555-0110"
+        date_of_loss: "2026-09-20"
+        loss_location: Chicago
+        loss_description: Car totaled on a back road.
+        estimated_loss_usd: 32000
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: missing, police_report: missing}
+      rules_fired: [EVID-001, LOSS-001]
+
+  - id: si-03
+    title: Claimed report date is before the loss date
+    tags: [theft, date_anomaly]
+    turns:
+      - claimant: "Aisha Karim, RN-7702. My bike was stolen from outside my Austin apartment on September 18th."
+      - agent: "Have you reported it before?"
+      - claimant: "Yes, I already reported this claim to your office on September 10th, I'm just following up. I filed a police report too. It was an 800 dollar bike. 512-555-0199."
+    expected:
+      claim_type: theft_property_loss
+      route: special_investigation
+      facts:
+        policyholder_name: Aisha Karim
+        policy_number: RN-7702
+        contact: "512-555-0199"
+        date_of_loss: "2026-09-18"
+        reported_date: "2026-09-10"
+        loss_location: Austin
+        loss_description: Bike stolen from outside the apartment.
+        estimated_loss_usd: 800
+      evidence: {police_report: available}
+      rules_fired: [TIMING-001]
+
+  - id: si-04
+    title: High-value jewelry with no receipts or report
+    tags: [theft, unsupported_loss]
+    turns:
+      - claimant: "James Okafor, RN-8120. Jewelry worth about 15,000 dollars went missing from my Atlanta apartment on Tuesday the 22nd."
+      - agent: "Do you have receipts, appraisals, or a police report?"
+      - claimant: "No receipts, it was inherited, and I haven't filed a police report yet. No one was hurt. 404-555-0133."
+    expected:
+      claim_type: theft_property_loss
+      route: special_investigation
+      facts:
+        policyholder_name: James Okafor
+        policy_number: RN-8120
+        contact: "404-555-0133"
+        date_of_loss: "2026-09-22"
+        loss_location: Atlanta
+        loss_description: Inherited jewelry went missing from the apartment.
+        estimated_loss_usd: 15000
+      safety: [{category: injury, status: absent}]
+      evidence: {ownership_proof: missing, police_report: missing}
+      rules_fired: [EVID-001]
+
+  - id: si-05
+    title: Reported 85 days after the loss (just inside the window)
+    tags: [home, boundary]
+    turns:
+      - claimant: "Priya Nair, HO-31552. On July 1st an AC condensate line overflowed in our Seattle attic and stained the bedroom ceiling."
+      - agent: "Anyone hurt?"
+      - claimant: "No. I have photos. It's maybe 1,200 dollars. 206-555-0172."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Priya Nair
+        policy_number: HO-31552
+        contact: "206-555-0172"
+        date_of_loss: "2026-07-01"
+        loss_location: Seattle
+        loss_description: AC condensate line overflowed and stained the ceiling.
+        estimated_loss_usd: 1200
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_not_fired: [TIMING-002]

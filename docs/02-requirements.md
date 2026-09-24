@@ -81,7 +81,7 @@ The conversation never blocks waiting for a tool.
 - FR-7.4 Export packet (Markdown/PDF + evidence ZIP).
 
 ### FR-8 Evaluation harness *(new)*
-- FR-8.1 ≥ 15 scripted claim scenarios (text transcripts) with gold labels: fields, claim type, route, safety.
+- FR-8.1 ≥ 50 scripted claim scenarios (text transcripts) with gold labels: fields, claim type, route, safety.
 - FR-8.2 `make eval` runs the pipeline on all scenarios and reports field F1, routing accuracy,
   safety recall, guardrail violations, latency, and token cost.
 - FR-8.3 Includes adversarial cases: corrections, negations, injected instructions, vague claims, lapsed policy.

@@ -1,0 +1,209 @@
+# Clean claims across every claim type. Reference date for all scenarios: 2026-09-24 (Thursday).
+category: happy_path
+scenarios:
+  - id: hp-01
+    title: Basement flood, spelled-out policy number, relative date
+    tags: [home, relative_date, voice_spelling]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe?"
+      - claimant: "Yes, everyone's fine, nobody was hurt. I'm Elena Brooks, policy H O 2 0 4 1 7."
+      - agent: "Thanks Elena. What happened?"
+      - claimant: "Last night our sump pump failed during the storm and the finished basement in our Denver house flooded. The carpet is soaked and the bottom of the drywall is wet."
+      - agent: "I'm sorry. Do you have any photos of the damage?"
+      - claimant: "Yes, I took photos on my phone before we moved anything. I don't have a contractor estimate yet, I'm calling one tomorrow."
+      - agent: "What's the best way for the adjuster to reach you?"
+      - claimant: "My cell, 720-555-0148. I'd guess the damage is around 9,000 dollars."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-23"
+        loss_location: Denver
+        loss_description: Sump pump failed and flooded the finished basement.
+        estimated_loss_usd: 9000
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available, repair_estimate: planned}
+      rules_fired: [DOC-001]
+      rules_not_fired: [SAFE-001, POLICY-001]
+
+  - id: hp-02
+    title: Rear-ended at a light, police came
+    tags: [auto, relative_date]
+    turns:
+      - claimant: "Hi, um, I got rear-ended on Monday and I need to open a claim. Sofia Martinez, policy A U 7 2 2 1 4."
+      - agent: "I'm sorry to hear that. Is anyone hurt?"
+      - claimant: "No, I'm fine, nobody was hurt. It was at a red light on Camelback Road in Phoenix. The other guy just didn't stop."
+      - agent: "Did police come to the scene?"
+      - claimant: "Yeah, they came and gave me a report number. I also took pictures of both cars. I haven't gotten a repair estimate yet."
+      - agent: "What's the best email or phone for the adjuster?"
+      - claimant: "Email is sofia.m@example.com."
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Sofia Martinez
+        policy_number: AU-72214
+        contact: sofia.m@example.com
+        date_of_loss: "2026-09-21"
+        loss_location: Phoenix
+        loss_description: Rear-ended while stopped at a red light.
+      safety: [{category: injury, status: absent}]
+      evidence: {police_report: available, damage_photo: available, repair_estimate: missing}
+      rules_not_fired: [SAFE-001, POLICY-001]
+
+  - id: hp-03
+    title: Laptop stolen from a coffee shop
+    tags: [theft, renters]
+    turns:
+      - claimant: "My laptop was stolen on Saturday the 19th at a coffee shop in Austin. I'm Aisha Karim, renters policy RN-7702."
+      - agent: "That's frustrating. Did you file a police report?"
+      - claimant: "Yes, I filed one that evening and I have the case number. I also still have the purchase receipt with the serial number. It was about 1,800 dollars."
+      - agent: "How can the adjuster reach you?"
+      - claimant: "512-555-0199."
+    expected:
+      claim_type: theft_property_loss
+      route: needs_docs
+      facts:
+        policyholder_name: Aisha Karim
+        policy_number: RN-7702
+        contact: "512-555-0199"
+        date_of_loss: "2026-09-19"
+        loss_location: Austin
+        loss_description: Laptop stolen at a coffee shop.
+        estimated_loss_usd: 1800
+      evidence: {police_report: available, ownership_proof: available}
+      rules_not_fired: [SAFE-001, POLICY-001, EVID-001]
+
+  - id: hp-04
+    title: Flight cancelled by hurricane
+    tags: [travel]
+    turns:
+      - claimant: "Hi, this is Daniel Ortiz, travel policy TR-3391. My flight from Miami to Lisbon on September 12th got cancelled because of the hurricane."
+      - agent: "I'm sorry. What did that cost you?"
+      - claimant: "I lost two prepaid hotel nights and a tour, about 2,400 dollars total. I have the airline's cancellation email and all the hotel receipts. The airline hasn't refunded anything yet."
+      - agent: "What's the best way to reach you?"
+      - claimant: "daniel.ortiz@example.com."
+    expected:
+      claim_type: travel_disruption
+      route: needs_docs
+      facts:
+        policyholder_name: Daniel Ortiz
+        policy_number: TR-3391
+        contact: daniel.ortiz@example.com
+        date_of_loss: "2026-09-12"
+        loss_location: Miami
+        loss_description: Flight cancelled due to hurricane; lost prepaid hotel and tour.
+        estimated_loss_usd: 2400
+      evidence: {carrier_notice: available, expense_receipt: available, refund_document: missing}
+      rules_not_fired: [SAFE-001, POLICY-001]
+
+  - id: hp-05
+    title: Urgent care reimbursement for an illness
+    tags: [medical]
+    turns:
+      - claimant: "I want to submit an urgent care bill for reimbursement. Grace Liu, member number MD-4418."
+      - agent: "Sure. When was the visit?"
+      - claimant: "September 2nd, at the CityMed urgent care in Portland. It was a sinus infection, I'm fully recovered now."
+      - agent: "How much did you pay, and what documents do you have?"
+      - claimant: "I paid 640 dollars by card and I have the itemized bill and my card receipt. I haven't received the explanation of benefits from my primary insurance yet."
+      - agent: "And the best contact for you?"
+      - claimant: "grace.liu@example.com."
+    expected:
+      claim_type: medical_reimbursement
+      route: needs_docs
+      facts:
+        policyholder_name: Grace Liu
+        policy_number: MD-4418
+        contact: grace.liu@example.com
+        date_of_loss: "2026-09-02"
+        loss_location: Portland
+        loss_description: Urgent care visit for a sinus infection.
+        estimated_loss_usd: 640
+      evidence: {medical_bill: available, payment_proof: available, explanation_of_benefits: missing}
+      rules_not_fired: [SAFE-001, POLICY-001]
+
+  - id: hp-06
+    title: Burst pipe, every document captured on camera
+    tags: [home, captures, ready]
+    turns:
+      - claimant: "Hi, I'm Priya Nair, policy HO-31552. A pipe under our kitchen sink in Seattle burst on Tuesday the 22nd."
+      - agent: "Is everyone okay?"
+      - claimant: "Yes, no one was hurt. A water mitigation company already dried everything out."
+      - agent: "Do you have documents for the damage?"
+      - claimant: "I have photos, the drying company's invoice, and a repair quote for 4,200 dollars. I'll show them on camera."
+      - agent: "Thank you, I've captured those. What's the best number for the adjuster?"
+      - claimant: "206-555-0172."
+    captures:
+      - {capture_id: cap-hp06-1, document_types: [damage_photo], caption: "Warped cabinet base and water-stained floor under a kitchen sink.", confirmed: true}
+      - {capture_id: cap-hp06-2, document_types: [mitigation_invoice], caption: "Invoice from a water mitigation company for drying services.", confirmed: true}
+      - {capture_id: cap-hp06-3, document_types: [repair_estimate], caption: "Contractor repair estimate totaling $4,200.", confirmed: true}
+    expected:
+      claim_type: home_water_damage
+      route: ready_for_adjuster
+      facts:
+        policyholder_name: Priya Nair
+        policy_number: HO-31552
+        contact: "206-555-0172"
+        date_of_loss: "2026-09-22"
+        loss_location: Seattle
+        loss_description: Pipe under the kitchen sink burst.
+        estimated_loss_usd: 4200
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available, mitigation_invoice: available, repair_estimate: available}
+      rules_not_fired: [DOC-001, INTAKE-001, POLICY-001]
+
+  - id: hp-07
+    title: Parking lot collision, every document captured
+    tags: [auto, captures, ready]
+    turns:
+      - claimant: "Omar Haddad, auto policy AU-66001. Someone backed into my car in a grocery store parking lot in Chicago on Sunday, September 20th."
+      - agent: "Is anyone hurt?"
+      - claimant: "No injuries. The police did an exchange form, and the other driver gave me her insurance card. I got a body shop estimate for 3,100 dollars. Let me hold everything up to the camera."
+      - agent: "Got them. And your phone number?"
+      - claimant: "312-555-0110."
+    captures:
+      - {capture_id: cap-hp07-1, document_types: [damage_photo], caption: "Dented rear passenger door of a gray sedan.", confirmed: true}
+      - {capture_id: cap-hp07-2, document_types: [police_report], caption: "Police information exchange form with a case number.", confirmed: true}
+      - {capture_id: cap-hp07-3, document_types: [witness_details], caption: "Insurance card listing the other driver's name and policy.", confirmed: true}
+      - {capture_id: cap-hp07-4, document_types: [repair_estimate], caption: "Body shop estimate for $3,100.", confirmed: true}
+    expected:
+      claim_type: auto_collision
+      route: ready_for_adjuster
+      facts:
+        policyholder_name: Omar Haddad
+        policy_number: AU-66001
+        contact: "312-555-0110"
+        date_of_loss: "2026-09-20"
+        loss_location: Chicago
+        loss_description: Another car backed into the parked vehicle.
+        estimated_loss_usd: 3100
+      safety: [{category: injury, status: absent}]
+      evidence: {police_report: available, witness_details: available, repair_estimate: available}
+      rules_not_fired: [DOC-001, SAFE-001]
+
+  - id: hp-08
+    title: Windstorm tree falls on detached garage
+    tags: [other_type, home]
+    turns:
+      - claimant: "Hi, Elena Brooks again, policy HO-20417. During the windstorm on Friday the 18th a big branch came down on our detached garage in Denver and crushed part of the roof."
+      - agent: "Is anyone hurt, and is the area safe?"
+      - claimant: "Nobody was hurt and we're staying away from the garage. I took photos. A roofer thinks it's about 6,500 dollars but I don't have anything in writing."
+      - agent: "Best contact?"
+      - claimant: "Same cell, 720-555-0148."
+    expected:
+      claim_type: other
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-18"
+        loss_location: Denver
+        loss_description: Tree branch fell on the detached garage roof during a windstorm.
+        estimated_loss_usd: 6500
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_not_fired: [SAFE-001]

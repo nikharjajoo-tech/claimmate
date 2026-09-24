@@ -1,0 +1,126 @@
+"""Run the eval harness.
+
+    python -m app.eval                          # all scenarios
+    python -m app.eval --limit 5                # quick smoke run
+    python -m app.eval --category safety_escalation,negation_trap
+    python -m app.eval --only hp-01,sf-01
+    python -m app.eval --resume eval/results/20260924-1530   # finish an interrupted run
+    python -m app.eval --models gemini-3-flash-preview   # pin one model for comparable metrics
+    python -m app.eval --check                  # exit 1 if a PRD target is missed (for CI)
+
+Writes results.jsonl (one line per scenario, appended as each finishes), summary.json, and
+report.md into eval/results/<timestamp>/.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import sys
+from dataclasses import replace
+from datetime import datetime
+from pathlib import Path
+
+from app.config import get_settings
+from app.eval.report import check_targets, compute_metrics, render_markdown
+from app.eval.runner import PacedLLM, ScenarioResult, load_results, run_eval
+from app.eval.scenario import load_scenarios
+from app.llm.client import GeminiLLM, LLMError
+
+RESULTS_DIR = Path(__file__).resolve().parents[2] / "eval" / "results"
+
+
+def _csv(value: str | None) -> set[str]:
+    return {v.strip() for v in value.split(",") if v.strip()} if value else set()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--only", help="comma-separated scenario ids")
+    parser.add_argument("--category", help="comma-separated categories")
+    parser.add_argument("--limit", type=int, help="run only the first N matching scenarios")
+    parser.add_argument("--concurrency", type=int, default=2, help="scenarios in flight at once (default 2)")
+    parser.add_argument("--min-interval", type=float, default=4.0, help="seconds between LLM call starts (default 4)")
+    parser.add_argument("--resume", type=Path, help="existing results directory; skips scenarios already scored")
+    parser.add_argument("--models", help="comma-separated model chain for this run (default: from .env); "
+                        "pin a single model so every scenario is scored against the same one")
+    parser.add_argument("--check", action="store_true", help="exit 1 if any PRD target is missed")
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.ERROR, format="%(levelname)s %(name)s: %(message)s")
+
+    scenarios = load_scenarios()
+    only, categories = _csv(args.only), _csv(args.category)
+    if only:
+        unknown = only - {s.id for s in scenarios}
+        if unknown:
+            parser.error(f"unknown scenario ids: {sorted(unknown)}")
+        scenarios = [s for s in scenarios if s.id in only]
+    if categories:
+        scenarios = [s for s in scenarios if s.category in categories]
+    if args.limit:
+        scenarios = scenarios[: args.limit]
+
+    out_dir = args.resume or RESULTS_DIR / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    results_path = out_dir / "results.jsonl"
+    previous = {r.id: r for r in load_results(results_path) if r.status == "ok"}
+    if previous:  # rewrite without failed attempts so reruns replace them
+        results_path.write_text("".join(r.model_dump_json() + "\n" for r in previous.values()))
+    todo = [s for s in scenarios if s.id not in previous]
+
+    settings = get_settings()
+    if args.models:
+        first, *rest = [m.strip() for m in args.models.split(",") if m.strip()]
+        settings = replace(settings, extract_model=first, fallback_models=tuple(rest))
+    print(f"{len(scenarios)} scenarios ({len(previous)} already done, {len(todo)} to run) -> {out_dir}")
+    print(f"models: {' -> '.join(settings.model_chain)} | concurrency {args.concurrency} | "
+          f"min interval {args.min_interval}s")
+
+    done = 0
+
+    def on_result(result: ScenarioResult) -> None:
+        nonlocal done
+        done += 1
+        with results_path.open("a") as f:
+            f.write(result.model_dump_json() + "\n")
+        mark = "PASS" if result.passed else ("ERR " if result.status == "error" else "FAIL")
+        detail = result.error[:80] if result.status == "error" else f"{result.predicted_route} ({result.total_ms} ms)"
+        print(f"[{done:>2}/{len(todo)}] {mark} {result.id:<6} {detail}", flush=True)
+
+    if todo:
+        try:
+            llm = PacedLLM(GeminiLLM(settings), args.min_interval)
+        except LLMError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        asyncio.run(run_eval(todo, llm, concurrency=args.concurrency, on_result=on_result))
+
+    wanted = {s.id for s in scenarios}
+    results = [r for r in load_results(results_path) if r.id in wanted]
+    order = {s.id: i for i, s in enumerate(scenarios)}
+    results.sort(key=lambda r: order[r.id])
+
+    metrics = compute_metrics(results)
+    meta = {
+        "Run": out_dir.name,
+        "Models": " -> ".join(settings.model_chain),
+        "Reference date": str(scenarios[0].today) if scenarios else "n/a",
+    }
+    (out_dir / "report.md").write_text(render_markdown(metrics, results, meta))
+    serializable = {**metrics, "confusion": {f"{e} -> {p}": n for (e, p), n in metrics["confusion"].items()}}
+    (out_dir / "summary.json").write_text(json.dumps(serializable, indent=2, default=str))
+
+    targets = check_targets(metrics)
+    print(f"\npassed {metrics['passed']}/{metrics['completed']} scenarios ({metrics['errors']} errors)")
+    for label, shown, met in targets:
+        print(f"  {'OK  ' if met else 'MISS'} {label}: {shown}")
+    print(f"report: {out_dir / 'report.md'}")
+    if metrics["errors"]:
+        print(f"resume with: python -m app.eval --resume {out_dir}")
+    return 1 if args.check and not all(met for _, _, met in targets) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

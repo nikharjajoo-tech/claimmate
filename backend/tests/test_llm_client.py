@@ -91,14 +91,15 @@ async def test_retries_transient_error_on_same_model():
 
 
 async def test_falls_back_after_retries_exhausted():
-    llm, client = make({"primary": [APIError(503), APIError(429)], "backup": [ok()]})
+    llm, client = make({"primary": [APIError(503), APIError(500)], "backup": [ok()]})
     result = await generate(llm)
     assert client.calls == ["primary", "primary", "backup"]
     assert result.call.model == "backup" and result.call.fell_back
 
 
-async def test_unavailable_model_is_skipped_without_retry():
-    llm, client = make({"primary": [APIError(404)], "backup": [ok()]})
+@pytest.mark.parametrize("code", [404, 429])
+async def test_unavailable_or_exhausted_model_is_skipped_without_retry(code):
+    llm, client = make({"primary": [APIError(code)], "backup": [ok()]})
     await generate(llm)
     assert client.calls == ["primary", "backup"]
 

@@ -1,0 +1,135 @@
+# The claimant corrects themselves; the latest explicit correction must win.
+category: correction
+scenarios:
+  - id: co-01
+    title: Day of the week corrected
+    tags: [home, date]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. A pipe in our Denver basement ceiling started leaking on Tuesday, the 22nd."
+      - agent: "Got it, Tuesday the 22nd."
+      - claimant: "Sorry, no, it was Wednesday the 23rd. Tuesday was when the plumber came for something else."
+      - agent: "Thanks. Anyone hurt, and best number?"
+      - claimant: "Nobody's hurt. 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-23"
+        loss_location: Denver
+        loss_description: Pipe in the basement ceiling started leaking.
+      safety: [{category: injury, status: absent}]
+      rules_not_fired: [POLICY-001]
+
+  - id: co-02
+    title: Transposed policy digits corrected
+    tags: [auto, policy_number]
+    turns:
+      - claimant: "Marcus Webb, my policy is AU-55380. Wait, no, sorry, it's AU-55830, I mixed up the digits."
+      - agent: "Thanks Marcus. What happened?"
+      - claimant: "A shopping cart rolled into my car at a store in Denver on Sunday the 20th and dented the fender. No one was hurt. I took photos. Email is marcus.webb@example.com."
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Marcus Webb
+        policy_number: AU-55830
+        contact: marcus.webb@example.com
+        date_of_loss: "2026-09-20"
+        loss_location: Denver
+        loss_description: A shopping cart dented the fender.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_not_fired: [POLICY-001]
+
+  - id: co-03
+    title: Loss estimate revised upward
+    tags: [home, amount]
+    turns:
+      - claimant: "Priya Nair, HO-31552. Our Seattle bathroom flooded on the 21st when the tub overflowed and leaked into the floor below."
+      - agent: "Do you have a sense of the cost?"
+      - claimant: "I first thought about 5,000, but the contractor came by and said it's closer to 7,500 dollars. I have his written estimate."
+      - agent: "Best number, and is anyone hurt?"
+      - claimant: "No one's hurt. 206-555-0172."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Priya Nair
+        policy_number: HO-31552
+        contact: "206-555-0172"
+        date_of_loss: "2026-09-21"
+        loss_location: Seattle
+        loss_description: Tub overflowed and leaked into the floor below.
+        estimated_loss_usd: 7500
+      safety: [{category: injury, status: absent}]
+      evidence: {repair_estimate: available}
+
+  - id: co-04
+    title: Name spelled out letter by letter
+    tags: [auto, name, voice_spelling]
+    turns:
+      - claimant: "Hi, it's Omar Hadad, policy AU-66001."
+      - agent: "Could you spell your last name?"
+      - claimant: "Sure, H A D D A D, two Ds in the middle. Haddad."
+      - agent: "Thanks. What happened?"
+      - claimant: "Hail on Saturday the 19th cracked my windshield and dented the hood while it was parked in Chicago. No injuries. I have photos. 312-555-0110."
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Omar Haddad
+        policy_number: AU-66001
+        contact: "312-555-0110"
+        date_of_loss: "2026-09-19"
+        loss_location: Chicago
+        loss_description: Hail cracked the windshield and dented the hood.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_not_fired: [POLICY-001]
+
+  - id: co-05
+    title: City corrected
+    tags: [auto, location]
+    turns:
+      - claimant: "Sofia Martinez, AU-72214. Someone hit my parked car overnight on the 22nd, outside my apartment in Tempe."
+      - agent: "In Tempe, got it."
+      - claimant: "Oh sorry, I just moved, it's Mesa now, not Tempe. The apartment is in Mesa."
+      - agent: "Thanks. Any injuries? Best email?"
+      - claimant: "No injuries, nobody was in it. sofia.m@example.com. There's no note from the other driver and I didn't call the police."
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Sofia Martinez
+        policy_number: AU-72214
+        contact: sofia.m@example.com
+        date_of_loss: "2026-09-22"
+        loss_location: Mesa
+        loss_description: Parked car was hit overnight.
+      safety: [{category: injury, status: absent}]
+      evidence: {police_report: missing, witness_details: missing}
+
+  - id: co-06
+    title: No photos, then found some
+    tags: [home, evidence]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. Our upstairs bathtub leaked through to the Denver dining room ceiling on Monday the 21st."
+      - agent: "Do you have photos?"
+      - claimant: "No, I don't have any photos."
+      - agent: "That's okay."
+      - claimant: "Oh wait, my husband just told me he took some photos on his phone when it happened. So we do have photos. Nobody got hurt. 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-21"
+        loss_location: Denver
+        loss_description: Bathtub leaked through the dining room ceiling.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}

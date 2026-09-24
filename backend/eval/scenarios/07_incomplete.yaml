@@ -1,0 +1,86 @@
+# Missing or vague facts must stay blank ("not specified"), never guessed.
+category: incomplete
+scenarios:
+  - id: in-01
+    title: Vague claim with no details
+    tags: [vague, hallucination_trap]
+    turns:
+      - claimant: "Something bad happened last week and I need insurance to pay for it. I lost a lot of stuff and maybe there was damage at my place. I don't remember the exact date. Please just open the claim."
+    expected:
+      claim_type: other
+      route: needs_docs
+      facts:
+        loss_description: Claimant lost belongings and possibly had property damage.
+      rules_fired: [INTAKE-001]
+
+  - id: in-02
+    title: Policy number not on hand
+    tags: [medical, missing_policy]
+    turns:
+      - claimant: "Hi, I'm Kevin Tran. I don't have my member number handy. I had an MRI on September 9th at Valley Imaging in Sacramento and paid 950 dollars out of pocket."
+      - agent: "No problem, we can add it later. Do you have documents?"
+      - claimant: "I have the itemized bill and my payment receipt. Email me at kevin.tran@example.com."
+    expected:
+      claim_type: medical_reimbursement
+      route: needs_docs
+      facts:
+        policyholder_name: Kevin Tran
+        contact: kevin.tran@example.com
+        date_of_loss: "2026-09-09"
+        loss_location: Sacramento
+        loss_description: Paid out of pocket for an MRI.
+        estimated_loss_usd: 950
+      evidence: {medical_bill: available, payment_proof: available}
+      rules_fired: [INTAKE-001]
+      rules_not_fired: [POLICY-001]
+
+  - id: in-03
+    title: Only a date range is known
+    tags: [theft, date_range]
+    turns:
+      - claimant: "James Okafor, RN-8120. I was traveling and when I got back to my Atlanta apartment my bike was gone from the storage room."
+      - agent: "When did it happen?"
+      - claimant: "Sometime between the 10th and the 15th, I really can't say exactly. I filed a police report yesterday. 404-555-0133."
+    expected:
+      claim_type: theft_property_loss
+      route: needs_docs
+      facts:
+        policyholder_name: James Okafor
+        policy_number: RN-8120
+        contact: "404-555-0133"
+        loss_location: Atlanta
+        loss_description: Bike stolen from the apartment storage room.
+      evidence: {police_report: available}
+      rules_fired: [INTAKE-001]
+
+  - id: in-04
+    title: Claimant withholds their name
+    tags: [home, missing_name]
+    turns:
+      - claimant: "I'd rather not give my name yet. The policy is HO-20417. A pipe burst in the Denver house on Monday the 21st."
+      - agent: "That's okay. Is anyone hurt?"
+      - claimant: "No. You can reach me at 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-21"
+        loss_location: Denver
+        loss_description: A pipe burst in the house.
+      safety: [{category: injury, status: absent}]
+      rules_fired: [INTAKE-001]
+      rules_not_fired: [POLICY-001]
+
+  - id: in-05
+    title: Greeting only
+    tags: [empty, hallucination_trap]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe?"
+      - claimant: "Hi. I need to file a claim."
+    expected:
+      claim_type: other
+      route: needs_docs
+      facts: {}
+      rules_fired: [INTAKE-001]

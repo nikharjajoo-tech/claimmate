@@ -1,0 +1,109 @@
+# Negated or resolved hazards must NOT escalate (false escalation target: 0).
+category: negation_trap
+scenarios:
+  - id: ng-01
+    title: Every hazard explicitly denied
+    tags: [home, negation]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. The washing machine hose split on Tuesday the 22nd and flooded our laundry room in Denver."
+      - agent: "Is everyone safe? Any hazards?"
+      - claimant: "Nobody was hurt, there are no electrical issues, and there's no mold. It's just wet flooring and baseboards, maybe 3,000 dollars."
+      - agent: "Best number?"
+      - claimant: "720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-22"
+        loss_location: Denver
+        loss_description: Washing machine hose split and flooded the laundry room.
+        estimated_loss_usd: 3000
+      safety: [{category: injury, status: absent}, {category: electrical, status: absent}, {category: mold, status: absent}]
+      rules_not_fired: [SAFE-001]
+
+  - id: ng-02
+    title: Shaken up but not injured
+    tags: [auto, negation]
+    turns:
+      - claimant: "Marcus Webb, AU-55830. I got sideswiped on I-25 in Denver on Tuesday, September 22nd."
+      - agent: "Are you hurt?"
+      - claimant: "I'm not injured, just shaken up. The mirror and the passenger door are scraped. I have photos. You can reach me at marcus.webb@example.com."
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Marcus Webb
+        policy_number: AU-55830
+        contact: marcus.webb@example.com
+        date_of_loss: "2026-09-22"
+        loss_location: Denver
+        loss_description: Sideswiped on the highway; mirror and door scraped.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_not_fired: [SAFE-001]
+
+  - id: ng-03
+    title: Clean supply-line water, no sewage
+    tags: [home, negation]
+    turns:
+      - claimant: "Priya Nair, HO-31552. The supply line to our upstairs toilet in Seattle cracked on Monday the 21st and water came through the living room ceiling."
+      - agent: "Is the water clean, and is everyone safe?"
+      - claimant: "It's clean water from the supply line, no sewage at all. Everyone's fine. I'd say around 5,000 dollars in damage. My number is 206-555-0172."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Priya Nair
+        policy_number: HO-31552
+        contact: "206-555-0172"
+        date_of_loss: "2026-09-21"
+        loss_location: Seattle
+        loss_description: Toilet supply line cracked and water came through the ceiling.
+        estimated_loss_usd: 5000
+      safety: [{category: sewage, status: absent}, {category: injury, status: absent}]
+      rules_not_fired: [SAFE-001]
+
+  - id: ng-04
+    title: Burglary while the home was empty
+    tags: [theft, renters, negation]
+    turns:
+      - claimant: "James Okafor, RN-8120. My Atlanta apartment was broken into on Saturday the 19th while I was at work."
+      - agent: "Was anyone home or hurt?"
+      - claimant: "No, the place was empty, nobody was hurt. They took my TV and a gaming console, about 1,500 dollars. I filed a police report and I have the receipts. Phone is 404-555-0133."
+    expected:
+      claim_type: theft_property_loss
+      route: needs_docs
+      facts:
+        policyholder_name: James Okafor
+        policy_number: RN-8120
+        contact: "404-555-0133"
+        date_of_loss: "2026-09-19"
+        loss_location: Atlanta
+        loss_description: Apartment burglarized; TV and gaming console stolen.
+        estimated_loss_usd: 1500
+      safety: [{category: injury, status: absent}]
+      evidence: {police_report: available, ownership_proof: available}
+      rules_not_fired: [SAFE-001]
+
+  - id: ng-05
+    title: Smoke alarm false alarm, the real issue is a leak
+    tags: [home, negation, distractor]
+    turns:
+      - claimant: "Hi, Elena Brooks, HO-20417. So yesterday the smoke alarm went off, but there was no fire, it was just burnt toast."
+      - agent: "Glad to hear it. What happened?"
+      - claimant: "The real problem is the dishwasher leaked last night into the kitchen floor in our Denver house. The hardwood is buckling. No one's hurt. Call me at 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-23"
+        loss_location: Denver
+        loss_description: Dishwasher leaked and the hardwood floor is buckling.
+      safety: [{category: fire, status: absent}, {category: injury, status: absent}]
+      rules_not_fired: [SAFE-001]

@@ -1,0 +1,161 @@
+# Present or uncertain danger must always escalate (safety recall target: 100%).
+category: safety_escalation
+scenarios:
+  - id: sf-01
+    title: Passenger with neck pain after red-light crash
+    tags: [auto, injury]
+    turns:
+      - claimant: "Hi, this is Marcus Webb, policy AU-55830. Somebody ran a red light and hit my driver's side at Colfax and Broadway in Denver on September 21st."
+      - agent: "I'm sorry to hear that. Is anyone hurt?"
+      - claimant: "My passenger has bad neck pain, she went to urgent care. I'm okay."
+      - agent: "Did the police come?"
+      - claimant: "Yes, report number DPD-26-4471. I got the other driver's plate. Email me at marcus.webb@example.com."
+    expected:
+      claim_type: auto_collision
+      route: emergency_escalation
+      facts:
+        policyholder_name: Marcus Webb
+        policy_number: AU-55830
+        contact: marcus.webb@example.com
+        date_of_loss: "2026-09-21"
+        loss_location: Denver
+        loss_description: Another driver ran a red light and hit the driver's side.
+      safety: [{category: injury, status: present}]
+      evidence: {police_report: available, witness_details: available}
+      rules_fired: [SAFE-001]
+
+  - id: sf-02
+    title: Water pooling at the electrical panel
+    tags: [home, electrical]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. Our water heater burst last night in the Denver house and there's water all over the utility room."
+      - agent: "Is everyone safe right now?"
+      - claimant: "We're okay, but the water is right up against the electrical panel and I saw it spark. We haven't gone back in there."
+      - agent: "Please stay out of that room. What's the best number to reach you?"
+      - claimant: "720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: emergency_escalation
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-23"
+        loss_location: Denver
+        loss_description: Water heater burst and flooded the utility room.
+      safety: [{category: injury, status: absent}, {category: electrical, status: present}]
+      rules_fired: [SAFE-001]
+
+  - id: sf-03
+    title: Ceiling collapse, renter cannot stay in the apartment
+    tags: [renters, unsafe_housing, relative_date]
+    turns:
+      - claimant: "I'm James Okafor, renters policy RN-8120. This morning the ceiling in my Atlanta apartment collapsed from a leak upstairs."
+      - agent: "That sounds frightening. Is everyone safe?"
+      - claimant: "Nobody got hit, but the landlord says the unit isn't safe to live in and I have nowhere to sleep tonight. A lot of my furniture is soaked."
+      - agent: "What's the best number for you?"
+      - claimant: "404-555-0133."
+    expected:
+      claim_type: home_water_damage
+      route: emergency_escalation
+      facts:
+        policyholder_name: James Okafor
+        policy_number: RN-8120
+        contact: "404-555-0133"
+        date_of_loss: "2026-09-24"
+        loss_location: Atlanta
+        loss_description: Ceiling collapsed from an upstairs leak, soaking furniture.
+      safety: [{category: injury, status: absent}, {category: unsafe_housing, status: present}]
+      rules_fired: [SAFE-001]
+
+  - id: sf-04
+    title: Kitchen fire with burns being treated
+    tags: [home, injury, fire, other_type]
+    turns:
+      - claimant: "Priya Nair, HO-31552. We had a grease fire in our Seattle kitchen yesterday evening."
+      - agent: "Is everyone okay?"
+      - claimant: "The fire department put it out, but my husband burned his hand pretty badly and he's still being treated. The kitchen is black with smoke."
+      - agent: "I'm so sorry. What's the best number?"
+      - claimant: "206-555-0172."
+    expected:
+      claim_type: other
+      route: emergency_escalation
+      facts:
+        policyholder_name: Priya Nair
+        policy_number: HO-31552
+        contact: "206-555-0172"
+        date_of_loss: "2026-09-23"
+        loss_location: Seattle
+        loss_description: Grease fire in the kitchen caused smoke damage.
+      safety: [{category: injury, status: present}]
+      rules_fired: [SAFE-001]
+
+  - id: sf-05
+    title: Possible mold and a coughing child
+    tags: [renters, mold, uncertain]
+    turns:
+      - claimant: "Hi, Aisha Karim, RN-7702. There's been a slow leak behind my bathroom wall in Austin. I noticed it on September 15th."
+      - agent: "Thanks. Anything else I should know?"
+      - claimant: "I think there might be mold growing behind the wall, it smells musty, and my son has been coughing a lot this week. I'm not sure if it's related."
+      - agent: "Best contact for you?"
+      - claimant: "512-555-0199."
+    expected:
+      claim_type: home_water_damage
+      route: emergency_escalation
+      facts:
+        policyholder_name: Aisha Karim
+        policy_number: RN-7702
+        contact: "512-555-0199"
+        date_of_loss: "2026-09-15"
+        loss_location: Austin
+        loss_description: Slow leak behind the bathroom wall.
+      safety: [{category: mold, status: uncertain}]
+      rules_fired: [SAFE-001]
+
+  - id: sf-06
+    title: Injury revealed later in the call
+    tags: [auto, injury, correction]
+    turns:
+      - claimant: "Sofia Martinez, AU-72214. I slid into a pole in Mesa yesterday when it was raining."
+      - agent: "Is anyone hurt?"
+      - claimant: "No, I'm fine."
+      - agent: "Okay. Do you have photos of the damage?"
+      - claimant: "Yes I have photos. Actually, now that I think about it, my back started hurting pretty bad this morning, I might need to see a doctor."
+      - agent: "Thank you for telling me. Best email?"
+      - claimant: "sofia.m@example.com."
+    expected:
+      claim_type: auto_collision
+      route: emergency_escalation
+      facts:
+        policyholder_name: Sofia Martinez
+        policy_number: AU-72214
+        contact: sofia.m@example.com
+        date_of_loss: "2026-09-23"
+        loss_location: Mesa
+        loss_description: Car slid into a pole in the rain.
+      safety: [{category: injury, status: present}]
+      evidence: {damage_photo: available}
+      rules_fired: [SAFE-001]
+
+  - id: sf-07
+    title: Cyclist hurt by the policyholder's car
+    tags: [auto, injury, third_party]
+    turns:
+      - claimant: "Omar Haddad, policy AU-66001. Yesterday I was turning right in Chicago and I hit a cyclist."
+      - agent: "Is anyone hurt?"
+      - claimant: "I'm fine, but the cyclist was taken to the hospital by ambulance with a broken leg."
+      - agent: "Did police come?"
+      - claimant: "Yes, they took a report. My phone is 312-555-0110."
+    expected:
+      claim_type: auto_collision
+      route: emergency_escalation
+      facts:
+        policyholder_name: Omar Haddad
+        policy_number: AU-66001
+        contact: "312-555-0110"
+        date_of_loss: "2026-09-23"
+        loss_location: Chicago
+        loss_description: Hit a cyclist while turning right.
+      safety: [{category: injury, status: present}]
+      evidence: {police_report: available}
+      rules_fired: [SAFE-001]

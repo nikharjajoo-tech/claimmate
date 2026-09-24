@@ -1,0 +1,105 @@
+# Policy verification problems must route to policy_review.
+category: policy_issue
+scenarios:
+  - id: po-01
+    title: Lapsed auto policy
+    tags: [auto, lapsed]
+    turns:
+      - claimant: "Tom Fischer, policy AU-10001. I backed into a light pole in a Boise parking garage on September 15th."
+      - agent: "Is anyone hurt?"
+      - claimant: "No, just the bumper. I have photos. Call me at 208-555-0187."
+    expected:
+      claim_type: auto_collision
+      route: policy_review
+      facts:
+        policyholder_name: Tom Fischer
+        policy_number: AU-10001
+        contact: "208-555-0187"
+        date_of_loss: "2026-09-15"
+        loss_location: Boise
+        loss_description: Backed into a light pole in a parking garage.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_fired: [POLICY-001]
+
+  - id: po-02
+    title: Policy number not in the directory
+    tags: [home, not_found]
+    turns:
+      - claimant: "My name is Ben Ross, policy number ZX-44120. A storm knocked out a window in my Omaha house on Tuesday the 22nd and rain got in."
+      - agent: "Anyone hurt?"
+      - claimant: "No. Phone is 402-555-0164."
+    expected:
+      claim_type: home_water_damage
+      route: policy_review
+      facts:
+        policyholder_name: Ben Ross
+        policy_number: ZX-44120
+        contact: "402-555-0164"
+        date_of_loss: "2026-09-22"
+        loss_location: Omaha
+        loss_description: Storm broke a window and rain got in.
+      safety: [{category: injury, status: absent}]
+      rules_fired: [POLICY-001]
+
+  - id: po-03
+    title: Cancelled homeowners policy
+    tags: [home, cancelled]
+    turns:
+      - claimant: "Laura Chen, homeowners policy HO-40090. Our water heater leaked in the garage in San Jose on September 10th."
+      - agent: "Is everyone safe?"
+      - claimant: "Yes, all fine. It's about 2,000 dollars to replace the drywall. laura.chen@example.com."
+    expected:
+      claim_type: home_water_damage
+      route: policy_review
+      facts:
+        policyholder_name: Laura Chen
+        policy_number: HO-40090
+        contact: laura.chen@example.com
+        date_of_loss: "2026-09-10"
+        loss_location: San Jose
+        loss_description: Water heater leaked in the garage.
+        estimated_loss_usd: 2000
+      safety: [{category: injury, status: absent}]
+      rules_fired: [POLICY-001]
+
+  - id: po-04
+    title: Trip outside the travel policy dates
+    tags: [travel, out_of_period]
+    turns:
+      - claimant: "Nina Patel, travel policy TR-5520. My train from Boston to Montreal on September 2nd was cancelled and I lost a prepaid hotel night, about 300 dollars."
+      - agent: "Do you have documentation?"
+      - claimant: "Yes, I have the cancellation email and the hotel receipt. Email me at nina.patel@example.com."
+    expected:
+      claim_type: travel_disruption
+      route: policy_review
+      facts:
+        policyholder_name: Nina Patel
+        policy_number: TR-5520
+        contact: nina.patel@example.com
+        date_of_loss: "2026-09-02"
+        loss_location: Boston
+        loss_description: Train cancelled; lost a prepaid hotel night.
+        estimated_loss_usd: 300
+      evidence: {carrier_notice: available, expense_receipt: available}
+      rules_fired: [POLICY-001]
+
+  - id: po-05
+    title: Caller name does not match the policyholder
+    tags: [home, name_mismatch]
+    turns:
+      - claimant: "Hi, I'm Rachel Stone, policy HO-20417. Heavy rain came in through a crack in the foundation and flooded the basement of my Denver house on Monday the 21st."
+      - agent: "Is everyone okay? Any sewage in the house?"
+      - claimant: "Everyone's fine, and it was only rainwater, no sewage. My number is 720-555-0199."
+    expected:
+      claim_type: home_water_damage
+      route: policy_review
+      facts:
+        policyholder_name: Rachel Stone
+        policy_number: HO-20417
+        contact: "720-555-0199"
+        date_of_loss: "2026-09-21"
+        loss_location: Denver
+        loss_description: Rain came through a foundation crack and flooded the basement.
+      safety: [{category: injury, status: absent}, {category: sewage, status: absent}]
+      rules_fired: [POLICY-001]

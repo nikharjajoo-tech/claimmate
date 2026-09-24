@@ -1,0 +1,93 @@
+# Evidence trust ladder: saying you have or sent something is "available"; only captures are "received".
+category: evidence
+scenarios:
+  - id: ev-01
+    title: Claimant says documents were already emailed
+    tags: [home, trust_ladder]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. The water softener leaked in our Denver basement on Sunday the 20th."
+      - agent: "Do you have photos or invoices?"
+      - claimant: "I already emailed you the photos and the drying company's invoice, so you should have received them. Nobody's hurt. 720-555-0148."
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-20"
+        loss_location: Denver
+        loss_description: Water softener leaked in the basement.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available, mitigation_invoice: available}
+      rules_fired: [DOC-001]
+
+  - id: ev-02
+    title: Only the damage photo is captured
+    tags: [auto, captures, partial]
+    turns:
+      - claimant: "Marcus Webb, AU-55830. I scraped a concrete barrier in a Denver parking garage on Tuesday the 22nd. No one was hurt."
+      - agent: "Can you show me the damage?"
+      - claimant: "Here's the bumper on camera. I'll get a repair estimate this weekend. No police were involved. marcus.webb@example.com."
+    captures:
+      - {capture_id: cap-ev02-1, document_types: [damage_photo], caption: "Scraped and cracked front bumper on a blue SUV.", confirmed: true}
+    expected:
+      claim_type: auto_collision
+      route: needs_docs
+      facts:
+        policyholder_name: Marcus Webb
+        policy_number: AU-55830
+        contact: marcus.webb@example.com
+        date_of_loss: "2026-09-22"
+        loss_location: Denver
+        loss_description: Scraped a concrete barrier in a parking garage.
+      safety: [{category: injury, status: absent}]
+      evidence: {repair_estimate: planned, police_report: missing}
+      rules_fired: [DOC-001]
+
+  - id: ev-03
+    title: Capture shows nothing relevant
+    tags: [home, captures, unconfirmed]
+    turns:
+      - claimant: "Elena Brooks, HO-20417. The ice maker line leaked under our Denver fridge on Monday the 21st. I have photos on my phone and I'm showing you the kitchen now. Nobody's hurt. 720-555-0148."
+    captures:
+      - {capture_id: cap-ev03-1, document_types: [], caption: "Blurry image of a hallway. No water or damage is visible.", confirmed: false}
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-21"
+        loss_location: Denver
+        loss_description: Ice maker line leaked under the fridge.
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available}
+      rules_fired: [DOC-001]
+
+  - id: ev-04
+    title: Flight delay with every document captured
+    tags: [travel, captures, ready]
+    turns:
+      - claimant: "Daniel Ortiz, TR-3391. My connecting flight in Dallas on September 14th was cancelled for a mechanical issue and I paid 1,500 dollars for a hotel and a new ticket."
+      - agent: "Can you show me your documents?"
+      - claimant: "Sure. Here's the airline notice, my itinerary, the receipts, and the airline's email saying they won't refund anything. daniel.ortiz@example.com."
+    captures:
+      - {capture_id: cap-ev04-1, document_types: [carrier_notice], caption: "Airline email: flight cancelled due to a mechanical issue.", confirmed: true}
+      - {capture_id: cap-ev04-2, document_types: [itinerary], caption: "Booking confirmation showing the original itinerary.", confirmed: true}
+      - {capture_id: cap-ev04-3, document_types: [expense_receipt], caption: "Hotel receipt and new ticket receipt totaling $1,500.", confirmed: true}
+      - {capture_id: cap-ev04-4, document_types: [refund_document], caption: "Airline email declining a refund.", confirmed: true}
+    expected:
+      claim_type: travel_disruption
+      route: ready_for_adjuster
+      facts:
+        policyholder_name: Daniel Ortiz
+        policy_number: TR-3391
+        contact: daniel.ortiz@example.com
+        date_of_loss: "2026-09-14"
+        loss_location: Dallas
+        loss_description: Connecting flight cancelled for a mechanical issue.
+        estimated_loss_usd: 1500
+      evidence: {carrier_notice: available, itinerary: available, expense_receipt: available, refund_document: available}
+      rules_not_fired: [DOC-001, POLICY-001]
