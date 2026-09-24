@@ -6,10 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
+    "langgraph>=1.0",
+    "google-genai>=2.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -23,3 +26,4 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -226,7 +226,7 @@ def test_route_precedence():
 
 def test_next_question_asks_for_first_pending_document():
     decision = run(home_facts(), captures=captures_for(DocumentType.DAMAGE_PHOTO))
-    assert next_question(decision) == "Do you have water mitigation or drying invoice? You can show it on camera."
+    assert next_question(decision) == "Do you have the water mitigation or drying invoice? You can show it on camera."
 
 
 def test_next_question_when_everything_is_collected():

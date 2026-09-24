@@ -235,5 +235,5 @@ def next_question(decision: Decision, config: RulesConfig | None = None) -> str:
         return "Could you confirm your policy number and the name on the policy?"
     pending = [item for item in decision.checklist if item.status in (EvidenceStatus.UNKNOWN, EvidenceStatus.MISSING)]
     if pending:
-        return f"Do you have {pending[0].label.lower()}? You can show it on camera."
+        return f"Do you have the {pending[0].label.lower()}? You can show it on camera."
     return "I have what I need to start your claim. A human adjuster will review it and follow up."

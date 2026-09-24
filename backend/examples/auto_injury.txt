@@ -1,0 +1,6 @@
+# Auto collision with a present injury: must escalate.
+CLAIMANT: Hi, this is Marcus Webb, policy AU-55830. Somebody ran a red light and hit my driver's side at Colfax and Broadway in Denver on September 21st.
+AGENT: I'm sorry to hear that. Is anyone hurt?
+CLAIMANT: My passenger has bad neck pain, she went to urgent care. I'm okay.
+AGENT: Did the police come?
+CLAIMANT: Yes, report number DPD-26-4471. I got the other driver's plate. Email me at marcus.webb@example.com.

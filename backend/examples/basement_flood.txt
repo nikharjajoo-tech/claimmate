@@ -1,0 +1,9 @@
+# Complete home water claim. Nobody hurt; photos taken; no invoices yet.
+AGENT: I can start your claim while we talk. First, is everyone safe?
+CLAIMANT: Yes, everyone's fine, nobody was hurt. I'm Elena Brooks, policy H O 2 0 4 1 7.
+AGENT: Thanks Elena. What happened?
+CLAIMANT: Last night our sump pump failed during the storm and the finished basement in our Denver house flooded. The carpet is soaked and the bottom of the drywall is wet.
+AGENT: I'm sorry. Do you have any photos of the damage?
+CLAIMANT: Yes, I took photos on my phone before we moved anything. I don't have a contractor estimate yet, I'm calling one tomorrow.
+AGENT: What's the best way for the adjuster to reach you?
+CLAIMANT: My cell, 720-555-0148. I'd guess the damage is around 9,000 dollars.
