@@ -79,13 +79,16 @@ def _has_claimant_speech(state: ClaimState) -> bool:
     return any(t.speaker == "claimant" and t.text.strip() for t in state["turns"])
 
 
-def build_graph(llm: StructuredLLM, mode: PipelineMode = "split"):
+def build_graph(llm: StructuredLLM, mode: PipelineMode = "split", prompt_version: str = "v1"):
+    if prompt_version not in prompts.PROMPT_VERSIONS:
+        raise ValueError(f"Unknown prompt version {prompt_version!r}")
+
     async def analyze(state: ClaimState) -> dict[str, Any]:
         if not _has_claimant_speech(state):
             return {"facts": ClaimFacts(), "classification": Classification(), "llm_calls": []}
         result = await llm.generate(
             step="analyze",
-            system=prompts.ANALYZE_SYSTEM,
+            system=prompts.analyze_system(prompt_version),
             prompt=prompts.extract_prompt(state["turns"], state.get("observations", []), state["today"]),
             schema=prompts.ClaimAnalysis,
         )
@@ -100,7 +103,7 @@ def build_graph(llm: StructuredLLM, mode: PipelineMode = "split"):
             return {"facts": ClaimFacts(), "llm_calls": []}
         result = await llm.generate(
             step="extract_facts",
-            system=prompts.EXTRACT_SYSTEM,
+            system=prompts.extract_system(prompt_version),
             prompt=prompts.extract_prompt(state["turns"], state.get("observations", []), state["today"]),
             schema=ClaimFacts,
         )

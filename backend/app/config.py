@@ -20,6 +20,7 @@ class Settings:
     groq_vision_models: tuple[str, ...]
     pipeline_provider: str  # "auto" | "groq" | "gemini"
     pipeline_mode: str  # "split" (extract + classify) | "single" (one call)
+    prompt_version: str  # promoted only after it beats the current version in the eval
     extract_model: str
     fallback_models: tuple[str, ...]
     live_model: str
@@ -52,6 +53,7 @@ def get_settings() -> Settings:
         ),
         pipeline_provider=os.getenv("CLAIMVOICE_PIPELINE_PROVIDER", "auto").strip().lower(),
         pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
+        prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "v1").strip().lower(),
         extract_model=os.getenv("CLAIMVOICE_EXTRACT_MODEL", "gemini-3.8-flash"),
         fallback_models=tuple(
             m.strip()

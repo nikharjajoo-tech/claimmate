@@ -150,9 +150,10 @@ async def run_eval(
     *,
     concurrency: int = 2,
     mode: str = "split",
+    prompt_version: str = "v1",
     on_result: Callable[[ScenarioResult], None] | None = None,
 ) -> list[ScenarioResult]:
-    graph = build_graph(llm, mode)
+    graph = build_graph(llm, mode, prompt_version)
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(scenario: Scenario) -> ScenarioResult:

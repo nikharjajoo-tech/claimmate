@@ -55,7 +55,7 @@ def lazy_pipeline_runner(settings: Settings):
     async def runner(turns, **kwargs):
         if "graph" not in state:
             llm = make_pipeline_llm(settings)
-            state["llm"], state["graph"] = llm, build_graph(llm, settings.pipeline_mode)
+            state["llm"], state["graph"] = llm, build_graph(llm, settings.pipeline_mode, settings.prompt_version)
         return await run_pipeline(state["llm"], turns, graph=state["graph"], **kwargs)
 
     return runner

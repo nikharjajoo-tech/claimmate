@@ -1,3 +1,4 @@
+import pytest
 from datetime import date
 
 from app.cli import parse_transcript
@@ -141,3 +142,40 @@ async def test_single_mode_skips_llm_without_claimant_speech():
     llm = FakeLLM()
     result = await run_pipeline(llm, [Turn(id="t1", speaker="agent", text="Hi")], today=TODAY, graph=build_graph(llm, "single"))
     assert llm.steps == [] and result.decision.route == Route.NEEDS_DOCS
+
+
+def test_prompt_v1_is_frozen():
+    """v1 is the baseline all eval comparisons are measured against; never edit it, add a version."""
+    import hashlib
+
+    from app.pipeline.prompts import EXTRACT_SYSTEM_V1
+
+    assert hashlib.sha256(EXTRACT_SYSTEM_V1.encode()).hexdigest() == "825e2941d7dd89f01d9a51e8482aa08da8328e947ab98b88e74ecff5eb0c80b3"
+
+
+def test_document_glossary_covers_every_type():
+    from app.domain.models import DocumentType
+    from app.pipeline.prompts import DOCUMENT_GLOSSARY, EXTRACT_SYSTEM_V2
+
+    assert set(DOCUMENT_GLOSSARY) == set(DocumentType)
+    for doc_type in DocumentType:
+        assert f"{doc_type.value}: " in EXTRACT_SYSTEM_V2
+
+
+async def test_prompt_version_selects_the_system_prompt():
+    from app.pipeline.graph import build_graph
+    from app.pipeline.prompts import EXTRACT_SYSTEM_V1, EXTRACT_SYSTEM_V2
+
+    class Recorder(FakeLLM):
+        async def generate(self, *, step, system, prompt, schema, image=None):
+            self.systems = getattr(self, "systems", []) + [system]
+            return await super().generate(step=step, system=system, prompt=prompt, schema=schema)
+
+    for version, expected in [("v1", EXTRACT_SYSTEM_V1), ("v2", EXTRACT_SYSTEM_V2)]:
+        for mode in ("split", "single"):
+            llm = Recorder()
+            await run_pipeline(llm, TURNS, today=TODAY, graph=build_graph(llm, mode, version))
+            assert llm.systems[0].startswith(expected)
+
+    with pytest.raises(ValueError):
+        build_graph(FakeLLM(), "split", "v9")

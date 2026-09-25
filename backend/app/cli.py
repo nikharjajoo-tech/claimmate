@@ -76,7 +76,8 @@ def main() -> int:
     turns = parse_transcript(args.transcript.read_text())
     try:
         llm = make_pipeline_llm()
-        graph = build_graph(llm, get_settings().pipeline_mode)
+        settings = get_settings()
+        graph = build_graph(llm, settings.pipeline_mode, settings.prompt_version)
         result = asyncio.run(run_pipeline(llm, turns, today=args.today, graph=graph))
     except LLMError as exc:
         print(f"error: {exc}", file=sys.stderr)
