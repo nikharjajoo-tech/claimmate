@@ -49,6 +49,7 @@ def main() -> int:
     parser.add_argument("--provider", choices=["groq", "gemini"], help="benchmark one provider (default: from .env)")
     parser.add_argument("--models", help="comma-separated model chain for the provider (default: from .env); "
                         "pin a single model so every scenario is scored against the same one")
+    parser.add_argument("--pipeline", choices=["split", "single"], help="pipeline mode (default: from .env)")
     parser.add_argument("--check", action="store_true", help="exit 1 if any PRD target is missed")
     args = parser.parse_args()
     logging.basicConfig(level=logging.ERROR, format="%(levelname)s %(name)s: %(message)s")
@@ -76,6 +77,8 @@ def main() -> int:
     settings = get_settings()
     if args.provider:
         settings = replace(settings, pipeline_provider=args.provider)
+    if args.pipeline:
+        settings = replace(settings, pipeline_mode=args.pipeline)
     if args.models:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
         if settings.pipeline_provider == "groq":
@@ -91,7 +94,7 @@ def main() -> int:
     else:
         model_desc = " -> ".join((chain["groq"] if settings.groq_api_key else []) + (chain["gemini"] if settings.has_api_key else []))
     print(f"{len(scenarios)} scenarios ({len(previous)} already done, {len(todo)} to run) -> {out_dir}")
-    print(f"models: {model_desc} | concurrency {args.concurrency} | "
+    print(f"models: {model_desc} | pipeline {settings.pipeline_mode} | concurrency {args.concurrency} | "
           f"min interval {args.min_interval}s")
 
     done = 0
@@ -111,7 +114,7 @@ def main() -> int:
         except LLMError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
-        asyncio.run(run_eval(todo, llm, concurrency=args.concurrency, on_result=on_result))
+        asyncio.run(run_eval(todo, llm, concurrency=args.concurrency, mode=settings.pipeline_mode, on_result=on_result))
 
     wanted = {s.id for s in scenarios}
     results = [r for r in load_results(results_path) if r.id in wanted]
@@ -122,6 +125,7 @@ def main() -> int:
     meta = {
         "Run": out_dir.name,
         "Models": model_desc,
+        "Pipeline": f"{settings.pipeline_mode} ({'1 LLM call' if settings.pipeline_mode == 'single' else '2 LLM calls'})",
         "Reference date": str(scenarios[0].today) if scenarios else "n/a",
     }
     (out_dir / "report.md").write_text(render_markdown(metrics, results, meta))

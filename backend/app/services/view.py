@@ -30,6 +30,19 @@ def session_view(session: ClaimSession) -> dict[str, Any]:
         "transcript": [t.model_dump() for t in session.turns],
         "tool_activity": [asdict(a) for a in session.tool_activity[-12:]],
         "escalations": list(session.escalations),
+        "camera_on": session.camera_on,
+        "evidence": [
+            {
+                "capture_id": c.capture_id,
+                "caption": c.caption,
+                "confirmed": c.confirmed,
+                "claimant_claim": c.claimant_claim,
+                "document_types": [t.value for t in c.document_types],
+                "source": c.source,
+                "url": f"/api/claims/{session.id}/evidence/{c.capture_id}",
+            }
+            for c in session.captures
+        ],
     }
     if result is None:
         view.update(

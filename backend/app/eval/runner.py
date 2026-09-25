@@ -149,9 +149,10 @@ async def run_eval(
     llm: StructuredLLM,
     *,
     concurrency: int = 2,
+    mode: str = "split",
     on_result: Callable[[ScenarioResult], None] | None = None,
 ) -> list[ScenarioResult]:
-    graph = build_graph(llm)
+    graph = build_graph(llm, mode)
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(scenario: Scenario) -> ScenarioResult:

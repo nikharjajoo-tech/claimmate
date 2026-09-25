@@ -83,7 +83,24 @@ async def test_success_sends_strict_schema_and_records_usage():
     assert (result.call.model, result.call.input_tokens, result.call.output_tokens) == ("groq:big", 50, 7)
     fmt = requests[0]["response_format"]
     assert fmt["type"] == "json_schema" and fmt["json_schema"]["strict"] is True
+    assert "reasoning_effort" not in requests[0]  # only gpt-oss models accept it
+    assert requests[0]["messages"][1]["content"] == "p"
+
+
+async def test_gpt_oss_models_get_low_reasoning_effort():
+    llm, requests, _ = make({"openai/gpt-oss-120b": [completion()]})
+    llm.models = ["openai/gpt-oss-120b"]
+    await generate(llm)
     assert requests[0]["reasoning_effort"] == "low"
+
+
+async def test_image_is_sent_as_data_url_content_part():
+    llm, requests, _ = make({"big": [completion()]})
+    await llm.generate(step="see", system="s", prompt="what is this?", schema=Answer, image=b"\xff\xd8\xffjpeg")
+    assert len(requests[0]["messages"]) == 1  # instructions ride in the user turn with the image
+    text, image = requests[0]["messages"][0]["content"]
+    assert text == {"type": "text", "text": "s\n\nwhat is this?"}
+    assert image["image_url"]["url"].startswith("data:image/jpeg;base64,/9j/")
 
 
 async def test_short_rate_limit_waits_and_retries_same_model():
@@ -125,7 +142,7 @@ async def test_chain_falls_through_to_next_provider():
             raise LLMError("groq down")
 
     class Working:
-        async def generate(self, *, step, system, prompt, schema):
+        async def generate(self, *, step, system, prompt, schema, image=None):
             return LLMResult[schema](value=schema(value="ok"), call=LLMCall(step=step, model="w", attempts=1, latency_ms=1))
 
     result = await ChainLLM([Failing(), Working()]).generate(step="s", system="", prompt="", schema=Answer)
@@ -144,3 +161,18 @@ def test_factory_selects_providers():
     assert isinstance(make_pipeline_llm(replace(both, pipeline_provider="gemini")), GeminiLLM)
     with pytest.raises(LLMError, match="No LLM provider"):
         make_pipeline_llm(replace(both, google_api_key="", groq_api_key=""))
+
+
+async def test_invalid_json_generation_is_retried_not_skipped():
+    failed = httpx.Response(400, json={"error": {"code": "json_validate_failed", "failed_generation": "{inj"}})
+    llm, requests, _ = make({"big": [failed, completion()]})
+    result = await generate(llm)
+    assert [r["model"] for r in requests] == ["big", "big"]
+    assert result.call.model == "groq:big"
+
+
+async def test_other_400s_skip_the_model():
+    llm, requests, _ = make({"big": [httpx.Response(400, json={"error": {"code": "model_decommissioned"}})],
+                             "small": [completion()]})
+    await generate(llm)
+    assert [r["model"] for r in requests] == ["big", "small"]

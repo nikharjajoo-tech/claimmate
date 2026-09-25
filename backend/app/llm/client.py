@@ -46,7 +46,9 @@ class LLMError(RuntimeError):
 
 
 class StructuredLLM(Protocol):
-    async def generate(self, *, step: str, system: str, prompt: str, schema: type[T]) -> LLMResult[T]: ...
+    async def generate(
+        self, *, step: str, system: str, prompt: str, schema: type[T], image: bytes | None = None
+    ) -> LLMResult[T]: ...
 
 
 class CircuitBreaker:
@@ -105,8 +107,12 @@ class GeminiLLM:
         self.breaker = breaker or CircuitBreaker(self.settings.llm_cooldown_s)
         self.models = self.settings.model_chain
 
-    async def generate(self, *, step: str, system: str, prompt: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, step: str, system: str, prompt: str, schema: type[T], image: bytes | None = None
+    ) -> LLMResult[T]:
         from google.genai import types
+
+        contents: Any = [types.Part.from_bytes(data=image, mime_type="image/jpeg"), prompt] if image else prompt
 
         config = types.GenerateContentConfig(
             system_instruction=system,
@@ -124,7 +130,7 @@ class GeminiLLM:
                 attempts += 1
                 try:
                     response = await asyncio.wait_for(
-                        self._client.aio.models.generate_content(model=model, contents=prompt, config=config),
+                        self._client.aio.models.generate_content(model=model, contents=contents, config=config),
                         timeout=self.settings.llm_timeout_s,
                     )
                     value = response.parsed if isinstance(response.parsed, schema) else schema.model_validate_json(response.text)

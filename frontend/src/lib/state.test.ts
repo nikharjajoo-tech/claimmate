@@ -12,6 +12,8 @@ const claim = (overrides: Partial<ClaimView> = {}): ClaimView => ({
   transcript: [],
   tool_activity: [],
   escalations: [],
+  camera_on: false,
+  evidence: [],
   route: "needs_docs",
   claim_type: "home_water_damage",
   severity: "medium",

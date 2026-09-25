@@ -1,9 +1,12 @@
-"""LangGraph claim pipeline.
+"""LangGraph claim pipeline, in one of two modes.
 
+split (two LLM calls):
     START -> extract_facts --+--> classify (LLM) ----+--> evaluate_rules -> build_packet -> END
                              +--> lookup_policy -----+
+single (one LLM call returning facts and classification together):
+    START -> analyze (LLM) -> lookup_policy -> evaluate_rules -> build_packet -> END
 
-Two LLM steps perceive; everything that decides is deterministic code.
+LLM steps perceive; everything that decides is deterministic code.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import operator
 import time
 from collections.abc import Awaitable, Callable
 from datetime import date
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
@@ -60,6 +63,7 @@ class PipelineResult(BaseModel):
 
 
 Node = Callable[[ClaimState], Awaitable[dict[str, Any]]]
+PipelineMode = Literal["split", "single"]
 
 
 def _timed(name: str, fn: Node) -> Node:
@@ -75,7 +79,22 @@ def _has_claimant_speech(state: ClaimState) -> bool:
     return any(t.speaker == "claimant" and t.text.strip() for t in state["turns"])
 
 
-def build_graph(llm: StructuredLLM):
+def build_graph(llm: StructuredLLM, mode: PipelineMode = "split"):
+    async def analyze(state: ClaimState) -> dict[str, Any]:
+        if not _has_claimant_speech(state):
+            return {"facts": ClaimFacts(), "classification": Classification(), "llm_calls": []}
+        result = await llm.generate(
+            step="analyze",
+            system=prompts.ANALYZE_SYSTEM,
+            prompt=prompts.extract_prompt(state["turns"], state.get("observations", []), state["today"]),
+            schema=prompts.ClaimAnalysis,
+        )
+        return {
+            "facts": result.value.facts,
+            "classification": result.value.classification,
+            "llm_calls": [result.call],
+        }
+
     async def extract_facts(state: ClaimState) -> dict[str, Any]:
         if not _has_claimant_speech(state):
             return {"facts": ClaimFacts(), "llm_calls": []}
@@ -116,24 +135,34 @@ def build_graph(llm: StructuredLLM):
         decision = state["decision"]
         return {
             "packet": build_packet(
-                state["facts"], state["classification"], state["policy"], decision, next_question(decision)
+                state["facts"],
+                state["classification"],
+                state["policy"],
+                decision,
+                next_question(decision),
+                state.get("captures", []),
             )
         }
 
     graph = StateGraph(ClaimState)
+    perceive = [("analyze", analyze)] if mode == "single" else [("extract_facts", extract_facts), ("classify", classify)]
     for name, fn in [
-        ("extract_facts", extract_facts),
-        ("classify", classify),
+        *perceive,
         ("lookup_policy", lookup),
         ("evaluate_rules", evaluate_rules),
         ("build_packet", packet),
     ]:
         graph.add_node(name, _timed(name, fn))
 
-    graph.add_edge(START, "extract_facts")
-    graph.add_edge("extract_facts", "classify")
-    graph.add_edge("extract_facts", "lookup_policy")
-    graph.add_edge(["classify", "lookup_policy"], "evaluate_rules")  # join: waits for both branches
+    if mode == "single":
+        graph.add_edge(START, "analyze")
+        graph.add_edge("analyze", "lookup_policy")
+        graph.add_edge("lookup_policy", "evaluate_rules")
+    else:
+        graph.add_edge(START, "extract_facts")
+        graph.add_edge("extract_facts", "classify")
+        graph.add_edge("extract_facts", "lookup_policy")
+        graph.add_edge(["classify", "lookup_policy"], "evaluate_rules")  # join: waits for both branches
     graph.add_edge("evaluate_rules", "build_packet")
     graph.add_edge("build_packet", END)
     return graph.compile()

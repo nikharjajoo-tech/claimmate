@@ -4,6 +4,9 @@ Browser -> server messages (JSON):
     {"type": "audio", "data": <base64 PCM16 mono 16 kHz>}
     {"type": "audio_end"}                     microphone stopped
     {"type": "text", "text": "...", "id": "optional-client-id"}
+    {"type": "camera", "enabled": true|false}
+    {"type": "video", "data": <base64 JPEG>}  ~1 frame per second while the camera is on
+    {"type": "capture", "claim": "optional: what the caller says it shows"}
     {"type": "close"}
 
 Server -> browser messages (JSON):
@@ -36,6 +39,8 @@ from google.genai import types
 
 from app.domain.policy_store import lookup_policy
 from app.live.tools import headline, scheduling, summarize_for_agent
+from app.llm.client import StructuredLLM
+from app.services.evidence import capture_summary, fresh_frame, is_jpeg, verify_and_record
 from app.services.sessions import ClaimService, ClaimSession, SessionError, ToolActivity
 from app.services.view import session_view
 
@@ -46,7 +51,15 @@ MAX_AUDIO_BYTES = 64_000
 MAX_CONCURRENT_TOOLS = 4
 MAX_CALL_SECONDS = 15 * 60
 # Sliding-window limits: (window seconds, max messages)
-RATE_LIMITS = {"audio": (1.0, 50), "text": (60.0, 20), "audio_end": (1.0, 5)}
+RATE_LIMITS = {
+    "audio": (1.0, 50),
+    "text": (60.0, 20),
+    "audio_end": (1.0, 5),
+    "video": (1.0, 3),
+    "camera": (1.0, 5),
+    "capture": (10.0, 3),
+}
+MAX_FRAME_BYTES = 300_000
 
 
 class BrowserSocket(Protocol):
@@ -83,7 +96,9 @@ class LiveRelay:
         *,
         model_name: str = "",
         max_seconds: float = MAX_CALL_SECONDS,
+        vision: StructuredLLM | None = None,
     ) -> None:
+        self.vision = vision
         self.session = session
         self.service = service
         self.browser = browser
@@ -176,6 +191,8 @@ class LiveRelay:
                 return {"error": "The claims team could not update right now. Continue the conversation."}, False
             summary = summarize_for_agent(result)
             return summary, summary["urgent"]
+        if name == "capture_evidence":
+            return await self.capture(str(args.get("caller_says_it_shows", "")), source="agent"), False
         if name == "escalate_to_human":
             self.session.escalate(str(args.get("reason", "")))
             self.request_update()
@@ -185,6 +202,28 @@ class LiveRelay:
                 "If anyone is in danger, contact emergency services now.",
             }, False
         return {"error": f"Unknown tool {name}"}, False
+
+    async def capture(self, claim: str, *, source: str) -> dict[str, Any]:
+        """Verify and record the current frame. Errors come back as data so the agent can react."""
+        if self.vision is None:
+            return {"captured": False, "error": "Photo verification is not configured on the server."}
+        try:
+            frame = fresh_frame(self.session)
+            result = await verify_and_record(self.session, self.vision, frame, claimant_claim=claim, source=source)
+        except SessionError as exc:
+            return {"captured": False, "message": str(exc)}
+        self.request_update()
+        await self.send_state()
+        return capture_summary(result.capture)
+
+    async def _manual_capture(self, claim: str, live: LiveSession) -> None:
+        result = await self.capture(claim, source="claimant")
+        if not result.get("captured"):
+            await self.send({"type": "error", "message": result.get("message") or result.get("error", "Capture failed.")})
+            return
+        # Let the agent know, as app state rather than caller speech, so it can talk about the photo.
+        notice = f"[App notice, not the caller speaking] The caller saved a photo. Verified contents: {result['what_is_visible']}"
+        await live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=notice)]), turn_complete=False)
 
     async def execute_tool(self, call: types.FunctionCall, live: LiveSession) -> None:
         call_id, name, args = str(call.id or uuid.uuid4().hex), str(call.name or ""), dict(call.args or {})
@@ -270,6 +309,30 @@ class LiveRelay:
             await live.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
         elif kind == "audio_end":
             await live.send_realtime_input(audio_stream_end=True)
+        elif kind == "camera":
+            enabled = message.get("enabled")
+            if not isinstance(enabled, bool):
+                raise ClientError("Camera state must be true or false.")
+            if self.session.set_camera(enabled):
+                notice = f"[App notice, not the caller speaking] The caller's camera is now {'ON' if enabled else 'OFF'}."
+                await live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=notice)]), turn_complete=False)
+                await self.send_state()
+        elif kind == "video":
+            try:
+                frame = base64.b64decode(str(message.get("data", "")), validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ClientError("Video frames must be base64.") from exc
+            if not is_jpeg(frame) or len(frame) > MAX_FRAME_BYTES:
+                raise ClientError("Video frames must be JPEG images under 300 KB.")
+            if not self.session.camera_on:
+                raise ClientError("Turn the camera on before sending frames.")
+            self.session.set_frame(frame)
+            await live.send_realtime_input(video=types.Blob(data=frame, mime_type="image/jpeg"))
+        elif kind == "capture":
+            claim = message.get("claim", "")
+            if not isinstance(claim, str) or len(claim) > 500:
+                raise ClientError("Capture description must be text under 500 characters.")
+            self._spawn(self._manual_capture(claim, live))
         elif kind == "text":
             text = message.get("text")
             if not isinstance(text, str) or not text.strip():
@@ -375,4 +438,5 @@ class LiveRelay:
                 if activity.phase == "running":
                     activity.phase, activity.headline = "cancelled", "Call ended"
             self.session.live_connected = False
+            self.session.set_camera(False)
             self.session.touch()

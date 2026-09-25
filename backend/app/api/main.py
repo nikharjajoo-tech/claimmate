@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import contextlib
 import logging
 import os
@@ -22,8 +24,10 @@ from pydantic import BaseModel, Field
 from app.config import Settings, get_settings
 from app.live.relay import LiveRelay, LiveSession
 from app.live.tools import TOOL_NAMES, build_live_config
-from app.llm.factory import make_pipeline_llm
+from app.llm.client import StructuredLLM
+from app.llm.factory import make_pipeline_llm, make_vision_llm
 from app.pipeline.graph import build_graph, run_pipeline
+from app.services.evidence import capture_summary, verify_and_record
 from app.services.sessions import ClaimService, SessionError, SessionStore
 from app.services.view import session_view
 
@@ -32,6 +36,11 @@ logger = logging.getLogger(__name__)
 OWNER_COOKIE = "claimvoice_owner"
 FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000"
+
+
+class EvidenceIn(BaseModel):
+    data: str = Field(description="Base64 JPEG", max_length=2_100_000)
+    claim: str = Field(default="", max_length=500)
 
 
 class MessageIn(BaseModel):
@@ -46,7 +55,7 @@ def lazy_pipeline_runner(settings: Settings):
     async def runner(turns, **kwargs):
         if "graph" not in state:
             llm = make_pipeline_llm(settings)
-            state["llm"], state["graph"] = llm, build_graph(llm)
+            state["llm"], state["graph"] = llm, build_graph(llm, settings.pipeline_mode)
         return await run_pipeline(state["llm"], turns, graph=state["graph"], **kwargs)
 
     return runner
@@ -68,6 +77,7 @@ def create_app(
     store: SessionStore | None = None,
     service: ClaimService | None = None,
     live_connect: Callable[[], AsyncContextManager[LiveSession]] | None = None,
+    vision: StructuredLLM | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     store = store or SessionStore()
@@ -84,6 +94,12 @@ def create_app(
         allow_headers=["Content-Type"],
     )
     app.state.store, app.state.service = store, service
+    vision_holder: dict[str, StructuredLLM | None] = {"llm": vision}
+
+    def get_vision() -> StructuredLLM | None:
+        if vision_holder["llm"] is None and (settings.groq_api_key or settings.has_api_key):
+            vision_holder["llm"] = make_vision_llm(settings)
+        return vision_holder["llm"]
 
     @app.exception_handler(SessionError)
     async def session_error(_request: Request, exc: SessionError):
@@ -138,6 +154,40 @@ def create_app(
         session.add_turn("agent", result.packet.next_question)
         return {"id": claim_id, "state": session_view(session)}
 
+    @app.post("/api/claims/{claim_id}/evidence", status_code=201)
+    async def upload_evidence(claim_id: str, body: EvidenceIn, request: Request) -> dict[str, Any]:
+        """Photo upload for typed mode (no live camera needed). Verified like a camera capture."""
+        session = store.get(claim_id, owner_of(request))
+        try:
+            image = base64.b64decode(body.data, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(422, "Image must be base64.") from exc
+        vision_llm = get_vision()
+        if vision_llm is None:
+            raise HTTPException(503, "Photo verification is not configured on the server.")
+        try:
+            result = await verify_and_record(session, vision_llm, image, claimant_claim=body.claim, source="upload")
+        except SessionError:
+            raise  # limits and validation keep their own status codes via the handler above
+        except Exception as exc:
+            logger.exception("evidence verification failed")
+            raise HTTPException(503, "Photo verification is unavailable right now. Try again shortly.") from exc
+        try:
+            await service.refresh(session)
+        except Exception:
+            logger.exception("pipeline failed after evidence upload")
+        summary = capture_summary(result.capture)
+        session.add_turn("agent", f"Thanks, I've added that photo. I can see: {result.capture.caption}")
+        return {"id": claim_id, "capture": summary, "state": session_view(session)}
+
+    @app.get("/api/claims/{claim_id}/evidence/{capture_id}")
+    def get_evidence(claim_id: str, capture_id: str, request: Request) -> Response:
+        session = store.get(claim_id, owner_of(request))
+        image = session.evidence_images.get(capture_id)
+        if image is None:
+            raise HTTPException(404, "No such evidence.")
+        return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
     @app.get("/api/claims/{claim_id}/packet")
     def download_packet(claim_id: str, request: Request) -> Response:
         session = store.get(claim_id, owner_of(request))
@@ -168,7 +218,7 @@ def create_app(
             await websocket.send_json({"type": "error", "message": "GOOGLE_API_KEY is not set on the server."})
             await websocket.close()
             return
-        relay = LiveRelay(session, service, websocket, live_connect, model_name=settings.live_model)
+        relay = LiveRelay(session, service, websocket, live_connect, model_name=settings.live_model, vision=get_vision())
         try:
             await relay.run()
         except WebSocketDisconnect:

@@ -57,6 +57,10 @@ class ClaimSession:
     observations: list[str] = field(default_factory=list)
     escalations: list[str] = field(default_factory=list)
     tool_activity: list[ToolActivity] = field(default_factory=list)
+    evidence_images: dict[str, bytes] = field(default_factory=dict)
+    camera_on: bool = False
+    last_frame: bytes | None = None
+    last_frame_at: float = 0.0
     revision: int = 0  # bumps on anything the pipeline reads
     result: PipelineResult | None = None
     result_revision: int = -1
@@ -92,6 +96,18 @@ class ClaimSession:
         self.escalations.append(reason.strip()[:300] or "unspecified")
         self.revision += 1
         self.touch()
+
+    def set_camera(self, on: bool) -> bool:
+        """Returns True if the state changed. Turning the camera off discards the last frame."""
+        changed = self.camera_on != on
+        self.camera_on = on
+        if not on:
+            self.last_frame, self.last_frame_at = None, 0.0
+        return changed
+
+    def set_frame(self, jpeg: bytes) -> None:
+        self.camera_on = True
+        self.last_frame, self.last_frame_at = jpeg, time.monotonic()
 
     def record_tool(self, activity: ToolActivity) -> None:
         self.tool_activity = [a for a in self.tool_activity if a.id != activity.id] + [activity]

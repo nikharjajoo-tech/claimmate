@@ -65,7 +65,7 @@ def new_claim(client):
 
 def test_health(client):
     body = client.get("/api/health").json()
-    assert body["ok"] and body["tools"] == ["lookup_policy", "update_claim", "escalate_to_human"]
+    assert body["ok"] and body["tools"] == ["lookup_policy", "update_claim", "escalate_to_human", "capture_evidence"]
 
 
 def test_create_sets_owner_cookie_and_greets(client):

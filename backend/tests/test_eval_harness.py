@@ -6,7 +6,7 @@ from app.eval.report import check_targets, compute_metrics, render_markdown
 from app.eval.runner import PacedLLM, run_eval
 from app.eval.scenario import load_scenarios
 from app.llm.client import LLMCall, LLMResult
-from app.pipeline.prompts import render_transcript
+from app.pipeline.prompts import ClaimAnalysis, render_transcript
 
 SCENARIOS = load_scenarios()
 
@@ -19,20 +19,26 @@ class OracleLLM:
         self.current = None
 
     async def generate(self, *, step, system, prompt, schema):
-        if schema is ClaimFacts:
+        if schema in (ClaimFacts, ClaimAnalysis):
             self.current = next(s for s in SCENARIOS if render_transcript(s.transcript()) in prompt)
-            value = self.current.gold_claim_facts()
+            facts = self.current.gold_claim_facts()
             if self.current.id in self.sabotage:
-                value = self.sabotage[self.current.id](value)
+                facts = self.sabotage[self.current.id](facts)
+        classification = Classification(claim_type=self.current.expected.claim_type)
+        if schema is ClaimFacts:
+            value = facts
+        elif schema is ClaimAnalysis:
+            value = ClaimAnalysis(facts=facts, classification=classification)
         else:
-            value = Classification(claim_type=self.current.expected.claim_type)
+            value = classification
         return LLMResult[schema](
             value=value, call=LLMCall(step=step, model="oracle", attempts=1, latency_ms=1, input_tokens=1000, output_tokens=200)
         )
 
 
-async def test_oracle_scores_perfectly_on_all_scenarios():
-    results = await run_eval(SCENARIOS, OracleLLM(), concurrency=1)
+@pytest.mark.parametrize("mode", ["split", "single"])
+async def test_oracle_scores_perfectly_on_all_scenarios(mode):
+    results = await run_eval(SCENARIOS, OracleLLM(), concurrency=1, mode=mode)
     failures = [(r.id, r.error or r.rule_problems) for r in results if not r.passed]
     assert failures == []
 
@@ -124,3 +130,19 @@ async def test_paced_llm_spaces_calls(monkeypatch):
 )
 def test_field_matching(field, expected, predicted, outcome):
     assert score_field(field, expected, predicted) == outcome
+
+
+def test_latency_excludes_pacing_waits():
+    from app.eval.report import scenario_latency_ms
+    from app.eval.runner import ScenarioResult
+    from app.llm.client import LLMCall
+
+    r = ScenarioResult(
+        id="x", title="", category="", tags=[], status="ok",
+        expected_route="needs_docs", expected_type="other", expected_escalation=False,
+        node_ms={"extract_facts": 12_000, "classify": 11_000, "lookup_policy": 1, "evaluate_rules": 3, "build_packet": 1},
+        llm_calls=[LLMCall(step="extract_facts", model="m", attempts=1, latency_ms=2_000),
+                   LLMCall(step="classify", model="m", attempts=1, latency_ms=800)],
+        total_ms=23_010,
+    )
+    assert scenario_latency_ms(r) == 2_000 + 800 + 1 + 3 + 1

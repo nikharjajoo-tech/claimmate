@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from app.domain.models import ClaimFacts, Classification, Decision, PolicyLookup, Route, is_blank
+from app.domain.models import ClaimFacts, Classification, Decision, EvidenceCapture, PolicyLookup, Route, is_blank
 
 DISCLAIMER = (
     "This is an intake triage packet. It does not confirm coverage, benefits, liability, or payment. "
@@ -39,6 +39,7 @@ def build_packet(
     policy: PolicyLookup,
     decision: Decision,
     next_question: str,
+    captures: list[EvidenceCapture] | None = None,
 ) -> ClaimPacket:
     summary = handoff_summary(facts, classification)
     policy_line = (
@@ -51,6 +52,12 @@ def build_packet(
     checklist = [f"- [{'x' if i.satisfied else ' '}] {i.label} ({i.status})" for i in decision.checklist]
     findings = [f"- `{f.rule_id}` [{f.severity}] {f.message}" for f in decision.findings] or ["- No rules fired"]
     notes = [f"- {n}" for n in decision.coverage_notes]
+    evidence = [
+        f"- `{c.capture_id}` ({c.source}) {c.caption} — "
+        + (f"claimant said \"{c.claimant_claim}\": {'confirmed' if c.confirmed else 'NOT confirmed'}" if c.claimant_claim else "no claimant description")
+        + (f"; counts as {', '.join(t.value for t in c.document_types)}" if c.document_types else "")
+        for c in captures or []
+    ] or ["- None captured"]
     audit = [f"{n}. {entry}" for n, entry in enumerate(decision.audit_trail, start=1)]
 
     markdown = "\n".join(
@@ -73,6 +80,9 @@ def build_packet(
             "",
             "## Documents",
             *checklist,
+            "",
+            "## Captured evidence",
+            *evidence,
             "",
             "## Rule findings",
             *findings,

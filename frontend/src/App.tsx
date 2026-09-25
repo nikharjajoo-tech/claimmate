@@ -3,6 +3,7 @@ import { CallPanel } from "./components/CallPanel";
 import { Notebook } from "./components/Notebook";
 import { api, LiveConnection } from "./lib/api";
 import { AudioPlayer, MicCapture } from "./lib/audio";
+import { CameraStream, fileToJpegBase64 } from "./lib/camera";
 import { initialState, reducer } from "./lib/state";
 import type { ServerMessage } from "./lib/types";
 
@@ -32,6 +33,9 @@ export default function App() {
   const live = useRef<LiveConnection | null>(null);
   const mic = useRef<MicCapture | null>(null);
   const player = useRef(new AudioPlayer());
+  const camera = useRef<CameraStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [cameraOn, setCameraOn] = useState(false);
 
   const loadClaim = useCallback(async (resume: boolean) => {
     try {
@@ -58,14 +62,22 @@ export default function App() {
     setMicOn(false);
   };
 
+  const stopCamera = useCallback((notify: boolean) => {
+    camera.current?.stop(videoRef.current);
+    camera.current = null;
+    setCameraOn(false);
+    if (notify) live.current?.send({ type: "camera", enabled: false });
+  }, []);
+
   const endCall = useCallback(() => {
+    stopCamera(true);
     stopMic();
     live.current?.send({ type: "audio_end" });
     live.current?.close();
     live.current = null;
     player.current.stop();
     dispatch({ type: "call", status: "ended" });
-  }, []);
+  }, [stopCamera]);
 
   const onServerMessage = useCallback((message: ServerMessage) => {
     if (message.type === "audio") player.current.play(message.data);
@@ -92,6 +104,7 @@ export default function App() {
     dispatch({ type: "error", error: "" });
     dispatch({ type: "call", status: "connecting" });
     live.current = new LiveConnection(claimId, onServerMessage, (reason) => {
+      stopCamera(false);
       stopMic();
       player.current.stop();
       live.current = null;
@@ -116,6 +129,46 @@ export default function App() {
       dispatch({ type: "error", error: "" });
     } catch (e) {
       dispatch({ type: "error", error: (e as Error).message });
+    } finally {
+      dispatch({ type: "busy", busy: false });
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (camera.current) {
+      stopCamera(true);
+      return;
+    }
+    if (!live.current?.open || !videoRef.current) return;
+    const stream = new CameraStream();
+    try {
+      // Mark the camera on first so the server accepts the frames that follow.
+      live.current.send({ type: "camera", enabled: true });
+      setCameraOn(true);
+      await stream.start(
+        videoRef.current,
+        (frame) => live.current?.send({ type: "video", data: frame }),
+        () => stopCamera(true),
+      );
+      camera.current = stream;
+    } catch {
+      stream.stop(videoRef.current);
+      stopCamera(true);
+      dispatch({ type: "error", error: "Camera unavailable. You can upload a photo instead." });
+    }
+  };
+
+  const capturePhoto = () => live.current?.send({ type: "capture", claim: "" });
+
+  const uploadPhoto = async (file: File) => {
+    if (!claimId) return;
+    dispatch({ type: "busy", busy: true });
+    try {
+      const result = await api.uploadEvidence(claimId, await fileToJpegBase64(file), "");
+      dispatch({ type: "claim", claim: result.state });
+      dispatch({ type: "error", error: "" });
+    } catch (e) {
+      dispatch({ type: "error", error: `Photo upload failed. ${(e as Error).message}` });
     } finally {
       dispatch({ type: "busy", busy: false });
     }
@@ -170,9 +223,14 @@ export default function App() {
           call={state.call}
           busy={state.busy}
           micOn={micOn}
+          cameraOn={cameraOn}
+          videoRef={videoRef}
           onStart={startCall}
           onEnd={endCall}
           onSend={send}
+          onCamera={toggleCamera}
+          onCapture={capturePhoto}
+          onUpload={uploadPhoto}
         />
         <Notebook claim={state.claim} tools={state.tools} />
       </main>

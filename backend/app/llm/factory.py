@@ -18,3 +18,14 @@ def make_pipeline_llm(settings: Settings | None = None) -> StructuredLLM:
     if mode in ("auto", "gemini") and settings.has_api_key:
         providers.append(GeminiLLM(settings))
     return providers[0] if len(providers) == 1 else ChainLLM(providers)
+
+
+def make_vision_llm(settings: Settings | None = None) -> StructuredLLM:
+    """For verifying camera frames: a Groq vision model first, Gemini Flash as fallback."""
+    settings = settings or get_settings()
+    providers: list[StructuredLLM] = []
+    if settings.groq_api_key and settings.groq_vision_models:
+        providers.append(GroqLLM(settings, models=list(settings.groq_vision_models)))
+    if settings.has_api_key:
+        providers.append(GeminiLLM(settings))
+    return providers[0] if len(providers) == 1 else ChainLLM(providers)

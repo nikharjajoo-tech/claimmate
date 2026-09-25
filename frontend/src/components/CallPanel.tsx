@@ -7,9 +7,14 @@ interface Props {
   call: CallStatus;
   busy: boolean;
   micOn: boolean;
+  cameraOn: boolean;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   onStart: () => void;
   onEnd: () => void;
   onSend: (text: string) => void;
+  onCamera: () => void;
+  onCapture: () => void;
+  onUpload: (file: File) => void;
 }
 
 const STATUS_TEXT: Record<CallStatus, string> = {
@@ -19,9 +24,12 @@ const STATUS_TEXT: Record<CallStatus, string> = {
   ended: "Call ended",
 };
 
-export function CallPanel({ transcript, call, busy, micOn, onStart, onEnd, onSend }: Props) {
+export function CallPanel(props: Props) {
+  const { transcript, call, busy, micOn, cameraOn, videoRef, onStart, onEnd, onSend, onCamera, onCapture, onUpload } =
+    props;
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const live = call === "live" || call === "connecting";
 
   useEffect(() => {
@@ -54,6 +62,34 @@ export function CallPanel({ transcript, call, busy, micOn, onStart, onEnd, onSen
           </button>
         )}
       </header>
+
+      <div className="media-bar">
+        {call === "live" && (
+          <button className="btn btn-small" onClick={onCamera} aria-pressed={cameraOn}>
+            {cameraOn ? "Stop camera" : "Show camera"}
+          </button>
+        )}
+        {cameraOn && (
+          <button className="btn btn-small btn-primary" onClick={onCapture}>
+            Capture photo
+          </button>
+        )}
+        <button className="btn btn-small" onClick={() => fileRef.current?.click()} disabled={busy}>
+          Upload photo
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      <video ref={videoRef} className="preview" hidden={!cameraOn} muted playsInline aria-label="Camera preview" />
 
       <ol className="transcript" aria-live="polite">
         {transcript.map((turn) => (

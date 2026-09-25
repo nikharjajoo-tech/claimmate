@@ -10,7 +10,7 @@ from google.genai import types
 from app.domain.models import Route
 from app.pipeline.graph import PipelineResult
 
-TOOL_NAMES = ["lookup_policy", "update_claim", "escalate_to_human"]
+TOOL_NAMES = ["lookup_policy", "update_claim", "escalate_to_human", "capture_evidence"]
 
 SYSTEM_INSTRUCTION = """
 You are the voice intake agent for an insurance claims team, taking a first notice of loss.
@@ -27,6 +27,14 @@ Your claims team works in the background while you talk. Never go quiet waiting 
   Never read out lists, rule IDs, or routing codes.
 - escalate_to_human: call it if the caller describes a current injury, someone in danger,
   or a home that is unsafe to stay in, even if you already called update_claim.
+
+The caller can turn on their camera. When it is on and you can see something relevant
+(damage, a water line, a receipt, a police report, a serial number), say in one sentence what you
+actually see, then call capture_evidence in the same turn. Report only what is visible: if the
+caller says "you can see the crack, right?" and you cannot, say what you do see and ask them to
+move closer or add light. Never agree with a description just to be agreeable. The capture is
+checked independently and its result tells you whether it matched. App notices about the camera
+are app state, not the caller speaking.
 
 Safety comes first. If anyone is hurt or in danger right now, tell them to contact emergency
 services, say a human representative will review their claim right away, and call
@@ -82,7 +90,24 @@ def tool_declarations() -> list[types.Tool]:
             required=["reason"],
         ),
     )
-    return [types.Tool(function_declarations=[lookup, update, escalate])]
+    capture = types.FunctionDeclaration(
+        name="capture_evidence",
+        description=(
+            "Save the current camera frame as claim evidence. It is verified independently against "
+            "what the caller said it shows. Runs in the background."
+        ),
+        behavior=types.Behavior.NON_BLOCKING,
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "caller_says_it_shows": _string(
+                    "What the caller says this shows, in their words, e.g. 'water damage on the drywall'. "
+                    "Empty if they did not say."
+                ),
+            },
+        ),
+    )
+    return [types.Tool(function_declarations=[lookup, update, escalate, capture])]
 
 
 def build_live_config(voice: str = "Kore") -> types.LiveConnectConfig:
@@ -130,6 +155,12 @@ def headline(name: str, args: dict[str, Any], result: dict[str, Any] | None) -> 
         if result is None:
             return "Updating the claim"
         return f"Claim updated: {result.get('status', '')}"
+    if name == "capture_evidence":
+        if result is None:
+            return "Checking the camera frame"
+        if not result.get("captured"):
+            return "No usable camera frame"
+        return "Photo saved, matches the caller's description" if result.get("matches_what_the_caller_said") else "Photo saved, not confirmed"
     if name == "escalate_to_human":
         return "Escalating to a human" if result is None else "Flagged for immediate human review"
     return name

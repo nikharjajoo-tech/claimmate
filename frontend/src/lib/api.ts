@@ -21,6 +21,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text, id: messageId }),
     }),
+  uploadEvidence: (id: string, jpegBase64: string, claim: string) =>
+    request<{ id: string; state: ClaimView }>(`/api/claims/${id}/evidence`, {
+      method: "POST",
+      body: JSON.stringify({ data: jpegBase64, claim }),
+    }),
   packetUrl: (id: string) => `/api/claims/${id}/packet`,
 };
 

@@ -19,6 +19,16 @@ export interface ToolActivity {
   scheduling: string | null;
 }
 
+export interface EvidenceItem {
+  capture_id: string;
+  caption: string;
+  confirmed: boolean;
+  claimant_claim: string;
+  document_types: string[];
+  source: "agent" | "claimant" | "upload";
+  url: string;
+}
+
 export type Route =
   | "emergency_escalation"
   | "special_investigation"
@@ -36,6 +46,8 @@ export interface ClaimView {
   transcript: Turn[];
   tool_activity: ToolActivity[];
   escalations: string[];
+  camera_on: boolean;
+  evidence: EvidenceItem[];
   route: Route | null;
   claim_type: string | null;
   severity: string | null;

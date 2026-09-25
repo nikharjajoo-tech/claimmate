@@ -17,7 +17,9 @@ class Settings:
     google_api_key: str
     groq_api_key: str
     groq_models: tuple[str, ...]
+    groq_vision_models: tuple[str, ...]
     pipeline_provider: str  # "auto" | "groq" | "gemini"
+    pipeline_mode: str  # "split" (extract + classify) | "single" (one call)
     extract_model: str
     fallback_models: tuple[str, ...]
     live_model: str
@@ -45,7 +47,11 @@ def get_settings() -> Settings:
             for m in os.getenv("CLAIMVOICE_GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b").split(",")
             if m.strip()
         ),
+        groq_vision_models=tuple(
+            m.strip() for m in os.getenv("CLAIMVOICE_GROQ_VISION_MODELS", "qwen/qwen3.8-27b").split(",") if m.strip()
+        ),
         pipeline_provider=os.getenv("CLAIMVOICE_PIPELINE_PROVIDER", "auto").strip().lower(),
+        pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
         extract_model=os.getenv("CLAIMVOICE_EXTRACT_MODEL", "gemini-3.8-flash"),
         fallback_models=tuple(
             m.strip()

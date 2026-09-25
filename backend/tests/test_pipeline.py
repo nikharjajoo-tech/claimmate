@@ -15,7 +15,7 @@ from app.domain.models import (
 )
 from app.llm.client import LLMCall, LLMResult
 from app.pipeline.graph import run_pipeline
-from app.pipeline.prompts import Turn, extract_prompt
+from app.pipeline.prompts import ClaimAnalysis, Turn, extract_prompt
 
 TODAY = date(2026, 9, 24)
 
@@ -39,7 +39,11 @@ TURNS = [
 
 class FakeLLM:
     def __init__(self, facts=FACTS, classification=CLASSIFICATION):
-        self.outputs = {ClaimFacts: facts, Classification: classification}
+        self.outputs = {
+            ClaimFacts: facts,
+            Classification: classification,
+            ClaimAnalysis: ClaimAnalysis(facts=facts, classification=classification),
+        }
         self.steps: list[str] = []
         self.prompts: dict[str, str] = {}
 
@@ -115,3 +119,25 @@ def test_parse_transcript():
         ("t3", "claimant", "Elena"),
     ]
     assert parse_transcript("Just one paragraph.")[0].speaker == "claimant"
+
+
+async def test_single_mode_makes_one_llm_call_with_same_result():
+    from app.pipeline.graph import build_graph
+
+    split_llm, single_llm = FakeLLM(), FakeLLM()
+    split = await run_pipeline(split_llm, TURNS, today=TODAY)
+    single = await run_pipeline(single_llm, TURNS, today=TODAY, graph=build_graph(single_llm, "single"))
+
+    assert single_llm.steps == ["analyze"]
+    assert split_llm.steps == ["extract_facts", "classify"]
+    assert set(single.node_ms) == {"analyze", "lookup_policy", "evaluate_rules", "build_packet"}
+    assert single.decision == split.decision
+    assert single.classification == split.classification
+
+
+async def test_single_mode_skips_llm_without_claimant_speech():
+    from app.pipeline.graph import build_graph
+
+    llm = FakeLLM()
+    result = await run_pipeline(llm, [Turn(id="t1", speaker="agent", text="Hi")], today=TODAY, graph=build_graph(llm, "single"))
+    assert llm.steps == [] and result.decision.route == Route.NEEDS_DOCS

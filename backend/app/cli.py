@@ -18,7 +18,8 @@ from pathlib import Path
 
 from app.llm.client import LLMError
 from app.llm.factory import make_pipeline_llm
-from app.pipeline.graph import PipelineResult, run_pipeline
+from app.config import get_settings
+from app.pipeline.graph import PipelineResult, build_graph, run_pipeline
 from app.pipeline.prompts import Turn
 
 
@@ -74,7 +75,9 @@ def main() -> int:
 
     turns = parse_transcript(args.transcript.read_text())
     try:
-        result = asyncio.run(run_pipeline(make_pipeline_llm(), turns, today=args.today))
+        llm = make_pipeline_llm()
+        graph = build_graph(llm, get_settings().pipeline_mode)
+        result = asyncio.run(run_pipeline(llm, turns, today=args.today, graph=graph))
     except LLMError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

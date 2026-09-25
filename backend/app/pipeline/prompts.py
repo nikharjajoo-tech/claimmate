@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.domain.models import ClaimFacts, ClaimType, DocumentType
+from app.domain.models import ClaimFacts, ClaimType, Classification, DocumentType
 
 
 class Turn(BaseModel):
@@ -77,9 +77,7 @@ def extract_prompt(turns: list[Turn], observations: list[str], today: date) -> s
     )
 
 
-CLASSIFY_SYSTEM = f"""
-You classify an insurance claim for intake routing. This is triage, not a coverage decision.
-
+CLASSIFICATION_RUBRIC = f"""
 Claim types: {", ".join(t.value for t in ClaimType)}. Use "other" when unclear.
 
 Severity rubric:
@@ -90,6 +88,26 @@ Severity rubric:
 
 Give a one-sentence rationale grounded in the facts.
 """.strip()
+
+CLASSIFY_SYSTEM = (
+    "You classify an insurance claim for intake routing. This is triage, not a coverage decision.\n\n"
+    + CLASSIFICATION_RUBRIC
+)
+
+# Single-call mode: one request returns facts and classification together.
+ANALYZE_SYSTEM = (
+    EXTRACT_SYSTEM
+    + "\n\nAfter extracting the facts, classify the claim for intake routing (triage, not a "
+    "coverage decision), based only on the facts you extracted.\n"
+    + CLASSIFICATION_RUBRIC
+)
+
+
+class ClaimAnalysis(BaseModel):
+    """Single-call output. Facts come first so the classification is conditioned on them."""
+
+    facts: ClaimFacts
+    classification: Classification
 
 
 def classify_prompt(facts: ClaimFacts) -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import random
 import time
@@ -53,6 +54,7 @@ class GroqLLM:
         http: httpx.AsyncClient | None = None,
         breaker: CircuitBreaker | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        models: list[str] | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         if not self.settings.groq_api_key:
@@ -60,18 +62,31 @@ class GroqLLM:
         self._http = http or httpx.AsyncClient(timeout=self.settings.llm_timeout_s)
         self._sleep = sleep
         self.breaker = breaker or CircuitBreaker(self.settings.llm_cooldown_s)
-        self.models = list(self.settings.groq_models)
+        self.models = list(models or self.settings.groq_models)
 
-    async def generate(self, *, step: str, system: str, prompt: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, step: str, system: str, prompt: str, schema: type[T], image: bytes | None = None
+    ) -> LLMResult[T]:
+        if image is None:
+            messages: list[dict[str, Any]] = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            # With an image, instructions go in the user turn: in a small live test (2 samples each)
+            # qwen3.8-27b failed strict JSON generation with a system message and succeeded without.
+            data_url = "data:image/jpeg;base64," + base64.b64encode(image).decode("ascii")
+            messages = [{"role": "user", "content": [
+                {"type": "text", "text": f"{system}\n\n{prompt}"},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ]}]
         body = {
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            "messages": messages,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": schema.__name__, "strict": True, "schema": strict_schema(schema)},
             },
             "temperature": 0,
-            # gpt-oss models reason before answering; reasoning tokens count against rate limits.
-            "reasoning_effort": "low",
         }
         headers = {"Authorization": f"Bearer {self.settings.groq_api_key}"}
         started = time.monotonic()
@@ -83,8 +98,12 @@ class GroqLLM:
             while attempt < self.settings.llm_attempts_per_model:
                 attempt += 1
                 attempts += 1
+                request = {**body, "model": model}
+                if "gpt-oss" in model:
+                    # gpt-oss reasons before answering; reasoning tokens count against rate limits.
+                    request["reasoning_effort"] = "low"
                 try:
-                    response = await self._http.post(GROQ_URL, json={**body, "model": model}, headers=headers)
+                    response = await self._http.post(GROQ_URL, json=request, headers=headers)
                 except httpx.HTTPError as exc:
                     last_error = f"{type(exc).__name__}: {exc}"
                     logger.warning("%s: %s on %s (attempt %d)", step, type(exc).__name__, model, attempt)
@@ -123,12 +142,16 @@ class GroqLLM:
                                 continue
                             logger.warning("%s: %s quota exhausted (retry-after %.0fs)", step, model, wait)
                             break
-                        if code in SKIP_MODEL_CODES:
+                        if code == 400 and "json_validate_failed" in response.text:
+                            # The model produced invalid JSON mid-generation: a retry can succeed.
+                            logger.warning("%s: %s generated invalid JSON (attempt %d)", step, model, attempt)
+                        elif code in SKIP_MODEL_CODES:
                             logger.warning("%s: HTTP %s on %s, skipping model", step, code, model)
                             break
-                        if code not in RETRYABLE_CODES:
+                        elif code not in RETRYABLE_CODES:
                             raise LLMError(f"{step} failed on groq:{model}: {last_error}")
-                        logger.warning("%s: HTTP %s on %s (attempt %d)", step, code, model, attempt)
+                        else:
+                            logger.warning("%s: HTTP %s on %s (attempt %d)", step, code, model, attempt)
                 if attempt < self.settings.llm_attempts_per_model:
                     await self._sleep(min(4.0, 0.5 * 2 ** (attempt - 1)) + random.uniform(0, 0.25))
             self.breaker.trip(model)
@@ -144,11 +167,13 @@ class ChainLLM:
             raise LLMError("No LLM provider is configured. Set GROQ_API_KEY or GOOGLE_API_KEY in .env.")
         self.providers = providers
 
-    async def generate(self, *, step: str, system: str, prompt: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, step: str, system: str, prompt: str, schema: type[T], image: bytes | None = None
+    ) -> LLMResult[T]:
         errors = []
         for provider in self.providers:
             try:
-                return await provider.generate(step=step, system=system, prompt=prompt, schema=schema)
+                return await provider.generate(step=step, system=system, prompt=prompt, schema=schema, image=image)
             except LLMError as exc:
                 errors.append(str(exc))
                 logger.warning("%s: provider %s failed, trying next", step, type(provider).__name__)

@@ -40,6 +40,20 @@ def _percentile(values: list[int], q: float) -> int | None:
     return int(statistics.quantiles(values, n=100, method="inclusive")[int(q) - 1])
 
 
+def processing_ms(r: ScenarioResult) -> dict[str, int]:
+    """Per-node time excluding rate-limit pacing: LLM nodes use the call's own latency."""
+    llm_ms: dict[str, int] = {}
+    for call in r.llm_calls:
+        llm_ms[call.step] = llm_ms.get(call.step, 0) + call.latency_ms
+    return {node: llm_ms.get(node, ms) for node, ms in r.node_ms.items()}
+
+
+def scenario_latency_ms(r: ScenarioResult) -> int:
+    """Pipeline latency without pacing waits. In split mode classify and lookup run in parallel,
+    but lookup is ~0 ms, so the sum is a faithful serial latency."""
+    return sum(processing_ms(r).values())
+
+
 def compute_metrics(results: list[ScenarioResult]) -> dict[str, Any]:
     ok = [r for r in results if r.status == "ok"]
     m: dict[str, Any] = {
@@ -99,11 +113,12 @@ def compute_metrics(results: list[ScenarioResult]) -> dict[str, Any]:
     m["category_pass"] = {cat: (sum(r.passed for r in rs), len(rs)) for cat, rs in by_cat.items()}
 
     # Latency, reliability, cost
-    totals = [r.total_ms for r in ok]
+    totals = [scenario_latency_ms(r) for r in ok]
     m["latency_p50_ms"] = _percentile(totals, 50)
     m["latency_p95_ms"] = _percentile(totals, 95)
-    node_names = sorted({n for r in ok for n in r.node_ms})
-    m["node_p50_ms"] = {n: _percentile([r.node_ms[n] for r in ok if n in r.node_ms], 50) for n in node_names}
+    per_node = [processing_ms(r) for r in ok]
+    node_names = sorted({n for nodes in per_node for n in nodes})
+    m["node_p50_ms"] = {n: _percentile([nodes[n] for nodes in per_node if n in nodes], 50) for n in node_names}
     calls = [c for r in ok for c in r.llm_calls]
     m["llm_calls"] = len(calls)
     m["fallback_rate"] = _ratio(sum(c.fell_back for c in calls), len(calls))
@@ -191,7 +206,7 @@ def render_markdown(m: dict[str, Any], results: list[ScenarioResult], meta: dict
         "",
         "## Latency, reliability, cost",
         "",
-        f"- Pipeline latency p50 {m['latency_p50_ms']} ms · p95 {m['latency_p95_ms']} ms",
+        f"- Pipeline latency p50 {m['latency_p50_ms']} ms · p95 {m['latency_p95_ms']} ms (excludes rate-limit pacing)",
         "- Node p50: " + ", ".join(f"{n} {v} ms" for n, v in m["node_p50_ms"].items()),
         f"- LLM calls: {m['llm_calls']} · retried {_pct(m['retry_rate'])} · fell back {_pct(m['fallback_rate'])}",
         "- Models: " + ", ".join(f"{k} ×{v}" for k, v in m["models_used"].items()),

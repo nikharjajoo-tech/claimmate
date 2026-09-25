@@ -13,7 +13,7 @@ Browser (mic PCM16 16 kHz, typed text)
    │ WebSocket
    ▼
 FastAPI relay ──────► Gemini Live (voice in/out, transcripts, background tool calls)
-   │                      │ lookup_policy · update_claim · escalate_to_human (non-blocking)
+   │                      │ lookup_policy · update_claim · escalate_to_human · capture_evidence
    ▼                      ▼
 Claim pipeline (LangGraph): extract_facts → classify ∥ lookup_policy → rules engine → packet
    │                                        (Groq gpt-oss or Gemini Flash, with fallback)
@@ -31,7 +31,7 @@ cp .env.example .env            # then paste your keys into .env
 
 cd backend
 make install                    # creates .venv and installs dependencies
-make test                       # 215 backend tests, no API calls
+make test                       # backend tests, no API calls
 
 cd ../frontend
 npm install
@@ -44,6 +44,10 @@ make serve                      # http://localhost:8000 serves the API and the b
 
 Open **http://localhost:8000**, click **Talk**, and allow the microphone. No microphone? Type in the
 box; typed messages work with or without a live call.
+
+During a call, **Show camera** lets the agent see the damage; it describes what it actually sees and
+saves the frame as evidence. Every photo (camera capture or **Upload photo**) is re-checked by a
+separate vision model and marked confirmed only if it really shows what the claimant described.
 
 For frontend development with hot reload, run `make serve` in `backend/` and `npm run dev` in
 `frontend/`, then open http://localhost:5173 (Vite proxies `/api` and `/ws` to the backend).

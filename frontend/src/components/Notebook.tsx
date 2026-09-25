@@ -79,6 +79,27 @@ export function Notebook({ claim, tools }: { claim: ClaimView | null; tools: Too
         </>
       )}
 
+      {claim.evidence.length > 0 && (
+        <>
+          <h3>Evidence ({claim.evidence.length})</h3>
+          <ul className="gallery">
+            {claim.evidence.map((item) => (
+              <li key={item.capture_id}>
+                <img src={item.url} alt={item.caption} loading="lazy" />
+                <p>{item.caption}</p>
+                {item.claimant_claim ? (
+                  <span className={`badge ${item.confirmed ? "badge-ok" : "badge-warn"}`}>
+                    {item.confirmed ? "Matches your description" : `Not confirmed: “${item.claimant_claim}”`}
+                  </span>
+                ) : (
+                  <span className="badge">No description to check</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {claim.next_question && (
         <p className="next">
           <span className="muted">Next question</span>

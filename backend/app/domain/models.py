@@ -132,6 +132,9 @@ class EvidenceCapture(BaseModel):
     document_types: list[DocumentType] = Field(default_factory=list)
     caption: str = ""
     confirmed: bool = False
+    claimant_claim: str = ""
+    source: Literal["agent", "claimant", "upload"] = "agent"
+    captured_at: str = ""
 
 
 # --- Policy ------------------------------------------------------------------
