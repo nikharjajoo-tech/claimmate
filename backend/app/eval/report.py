@@ -232,5 +232,7 @@ def render_markdown(m: dict[str, Any], results: list[ScenarioResult], meta: dict
             if exp != pred:
                 out.append(f"- Evidence `{doc}`: expected `{exp}`, got `{pred}`")
         out += [f"- Rules: {p}" for p in r.rule_problems]
+        if r.expected_escalation != (r.predicted_route == Route.EMERGENCY_ESCALATION) and r.safety_facts:
+            out.append("- Extracted safety facts: " + "; ".join(f"`{f}`" for f in r.safety_facts))
         out.append("")
     return "\n".join(out) + "\n"

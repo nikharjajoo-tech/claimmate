@@ -40,10 +40,15 @@ TURNS = [
 
 class FakeLLM:
     def __init__(self, facts=FACTS, classification=CLASSIFICATION):
+        from app.pipeline.prompts import ClaimAnalysisV2, ClaimFactsV2
+
+        facts_v2 = ClaimFactsV2.model_validate(facts.model_dump())
         self.outputs = {
             ClaimFacts: facts,
             Classification: classification,
             ClaimAnalysis: ClaimAnalysis(facts=facts, classification=classification),
+            ClaimFactsV2: facts_v2,
+            ClaimAnalysisV2: ClaimAnalysisV2(facts=facts_v2, classification=classification),
         }
         self.steps: list[str] = []
         self.prompts: dict[str, str] = {}
@@ -179,3 +184,41 @@ async def test_prompt_version_selects_the_system_prompt():
 
     with pytest.raises(ValueError):
         build_graph(FakeLLM(), "split", "v9")
+
+
+async def test_v2_uses_narrow_schema_and_converts_to_domain_facts():
+    from app.domain.models import EvidenceStatus
+    from app.pipeline.graph import build_graph
+    from app.pipeline.prompts import ClaimAnalysisV2, ClaimFactsV2, EvidenceMention
+
+    v2_facts = ClaimFactsV2(
+        **FACTS.model_dump(exclude={"evidence"}),
+        evidence=[EvidenceMention(document_type="damage_photo", status="available")],
+    )
+
+    class V2LLM:
+        def __init__(self):
+            self.schemas = []
+
+        async def generate(self, *, step, system, prompt, schema, image=None):
+            self.schemas.append(schema)
+            value = {ClaimFactsV2: v2_facts, Classification: CLASSIFICATION,
+                     ClaimAnalysisV2: ClaimAnalysisV2(facts=v2_facts, classification=CLASSIFICATION)}[schema]
+            return LLMResult[schema](value=value, call=LLMCall(step=step, model="f", attempts=1, latency_ms=1))
+
+    for mode, expected in [("split", [ClaimFactsV2, Classification]), ("single", [ClaimAnalysisV2])]:
+        llm = V2LLM()
+        result = await run_pipeline(llm, TURNS, today=TODAY, graph=build_graph(llm, mode, "v2"))
+        assert llm.schemas == expected
+        assert type(result.facts) is ClaimFacts
+        assert result.facts.evidence[0].status == EvidenceStatus.AVAILABLE
+        assert result.decision.route == Route.NEEDS_DOCS
+
+
+def test_v2_schema_cannot_express_received_evidence():
+    import pydantic
+
+    from app.pipeline.prompts import EvidenceMention
+
+    with pytest.raises(pydantic.ValidationError):
+        EvidenceMention(document_type="damage_photo", status="received")

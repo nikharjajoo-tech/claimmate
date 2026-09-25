@@ -61,6 +61,8 @@ class ScenarioResult(BaseModel):
     evidence: dict[DocumentType, tuple[EvidenceStatus, EvidenceStatus]] = Field(default_factory=dict)
     rules_fired: list[str] = Field(default_factory=list)
     rule_problems: list[str] = Field(default_factory=list)
+    safety_facts: list[str] = Field(default_factory=list)  # for diagnosing escalation errors
+    finding_messages: list[str] = Field(default_factory=list)
     llm_calls: list[LLMCall] = Field(default_factory=list)
     node_ms: dict[str, int] = Field(default_factory=dict)
     total_ms: int = 0
@@ -124,6 +126,8 @@ def score_scenario(scenario: Scenario, result: PipelineResult) -> ScenarioResult
         },
         rules_fired=fired,
         rule_problems=problems,
+        safety_facts=[f"{f.category}={f.status}: {f.description}" for f in result.facts.safety_facts],
+        finding_messages=[f"{f.rule_id}: {f.message}" for f in result.decision.findings],
         llm_calls=result.llm_calls,
         node_ms=result.node_ms,
         total_ms=result.total_ms,

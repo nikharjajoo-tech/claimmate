@@ -6,7 +6,7 @@ from app.eval.report import check_targets, compute_metrics, render_markdown
 from app.eval.runner import PacedLLM, run_eval
 from app.eval.scenario import load_scenarios
 from app.llm.client import LLMCall, LLMResult
-from app.pipeline.prompts import ClaimAnalysis, render_transcript
+from app.pipeline.prompts import ClaimAnalysis, ClaimAnalysisV2, ClaimFactsV2, render_transcript
 
 SCENARIOS = load_scenarios()
 
@@ -19,7 +19,7 @@ class OracleLLM:
         self.current = None
 
     async def generate(self, *, step, system, prompt, schema):
-        if schema in (ClaimFacts, ClaimAnalysis):
+        if schema in (ClaimFacts, ClaimAnalysis, ClaimFactsV2, ClaimAnalysisV2):
             self.current = next(s for s in SCENARIOS if render_transcript(s.transcript()) in prompt)
             facts = self.current.gold_claim_facts()
             if self.current.id in self.sabotage:
@@ -29,6 +29,10 @@ class OracleLLM:
             value = facts
         elif schema is ClaimAnalysis:
             value = ClaimAnalysis(facts=facts, classification=classification)
+        elif schema is ClaimFactsV2:
+            value = ClaimFactsV2.model_validate(facts.model_dump())
+        elif schema is ClaimAnalysisV2:
+            value = ClaimAnalysisV2(facts=ClaimFactsV2.model_validate(facts.model_dump()), classification=classification)
         else:
             value = classification
         return LLMResult[schema](
@@ -36,9 +40,9 @@ class OracleLLM:
         )
 
 
-@pytest.mark.parametrize("mode", ["split", "single"])
-async def test_oracle_scores_perfectly_on_all_scenarios(mode):
-    results = await run_eval(SCENARIOS, OracleLLM(), concurrency=1, mode=mode)
+@pytest.mark.parametrize(("mode", "prompt"), [("split", "v1"), ("single", "v1"), ("split", "v2"), ("single", "v2")])
+async def test_oracle_scores_perfectly_on_all_scenarios(mode, prompt):
+    results = await run_eval(SCENARIOS, OracleLLM(), concurrency=1, mode=mode, prompt_version=prompt)
     failures = [(r.id, r.error or r.rule_problems) for r in results if not r.passed]
     assert failures == []
 

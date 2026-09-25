@@ -6,7 +6,7 @@ import json
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.models import ClaimFacts, ClaimType, Classification, DocumentType
 
@@ -126,11 +126,17 @@ Fields
 - estimated_loss_usd: a number whenever the claimant states an amount, including informal
   estimates ("a roofer thinks about 6,500").
 - parties_involved: other people or organizations involved (other driver, landlord, airline).
-- safety_facts: one entry per injury or hazard the claimant mentions, with status
-    present   = happening now or someone is hurt ("my passenger has neck pain")
+- safety_facts: dangers to people, not damage to property. One entry per injury or hazard
+  the claimant mentions, with status
+    present   = someone is hurt, or the claimant describes a current danger
+                ("my passenger has neck pain", "the water is sparking at the panel")
     absent    = explicitly denied ("nobody is hurt", "no electrical issues")
     uncertain = claimant is unsure ("I think there might be mold")
   Categories: injury, unsafe_housing, electrical, sewage, mold, fire, other.
+  unsafe_housing means the home cannot be lived in right now (the claimant or an authority
+  says it is unsafe, or they have nowhere to stay). Property damage by itself is NOT a safety
+  fact: a flooded basement, buckled flooring, a damaged garage the family is staying away
+  from, or a false alarm ("the smoke alarm went off, it was just toast") get no present entry.
   Never infer an injury from a request for medical documents.
 - evidence: one entry per document type the claimant talks about, with the latest status
     missing   = they do not have it or it does not exist ("no police report yet",
@@ -186,6 +192,39 @@ CLASSIFY_SYSTEM = (
     "You classify an insurance claim for intake routing. This is triage, not a coverage decision.\n\n"
     + CLASSIFICATION_RUBRIC
 )
+
+
+class EvidenceMention(BaseModel):
+    """What the extractor may say about a document. There is no 'received' and no capture ids:
+    only a verified capture can produce those, so the model cannot even express them."""
+
+    document_type: DocumentType
+    status: Literal["unknown", "missing", "planned", "available"]
+    source_turn_ids: list[str] = Field(default_factory=list)
+
+
+class ClaimFactsV2(ClaimFacts):
+    """v2 extraction schema: ClaimFacts with system-only evidence fields removed."""
+
+    evidence: list[EvidenceMention] = Field(default_factory=list)  # type: ignore[assignment]
+
+
+class ClaimAnalysisV2(BaseModel):
+    facts: ClaimFactsV2
+    classification: Classification
+
+
+def extraction_schema(version: str) -> type[BaseModel]:
+    return ClaimFactsV2 if version == "v2" else ClaimFacts
+
+
+def analysis_schema(version: str) -> type[BaseModel]:
+    return ClaimAnalysisV2 if version == "v2" else ClaimAnalysis
+
+
+def to_claim_facts(value: BaseModel) -> ClaimFacts:
+    """Normalize any version's extraction output to the domain model the rules engine reads."""
+    return value if type(value) is ClaimFacts else ClaimFacts.model_validate(value.model_dump())
 
 
 class ClaimAnalysis(BaseModel):
