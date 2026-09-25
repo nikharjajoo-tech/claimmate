@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = REPO_ROOT / "backend" / "data"
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,10 @@ class Settings:
     pipeline_provider: str  # "auto" | "groq" | "gemini"
     pipeline_mode: str  # "split" (extract + classify) | "single" (one call)
     prompt_version: str  # promoted only after it beats the current version in the eval
+    database_url: str
+    evidence_dir: Path
+    adjuster_passcode: str  # empty disables the adjuster API
+    session_secret: str  # signs adjuster sessions; random per process if unset
     extract_model: str
     fallback_models: tuple[str, ...]
     live_model: str
@@ -54,6 +60,10 @@ def get_settings() -> Settings:
         pipeline_provider=os.getenv("CLAIMVOICE_PIPELINE_PROVIDER", "auto").strip().lower(),
         pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
         prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "v1").strip().lower(),
+        database_url=os.getenv("CLAIMVOICE_DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}"),
+        evidence_dir=Path(os.getenv("CLAIMVOICE_EVIDENCE_DIR", str(DATA_DIR / "evidence"))),
+        adjuster_passcode=os.getenv("CLAIMVOICE_ADJUSTER_PASSCODE", "").strip(),
+        session_secret=os.getenv("CLAIMVOICE_SESSION_SECRET", "").strip() or secrets.token_hex(32),
         extract_model=os.getenv("CLAIMVOICE_EXTRACT_MODEL", "gemini-3.8-flash"),
         fallback_models=tuple(
             m.strip()

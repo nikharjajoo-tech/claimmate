@@ -18,7 +18,8 @@ FIELD_LABELS = {
 }
 
 
-def session_view(session: ClaimSession) -> dict[str, Any]:
+def session_view(session: ClaimSession, *, evidence_url_prefix: str | None = None) -> dict[str, Any]:
+    evidence_url_prefix = evidence_url_prefix or f"/api/claims/{session.id}/evidence"
     result = session.result
     view: dict[str, Any] = {
         "id": session.id,
@@ -31,6 +32,11 @@ def session_view(session: ClaimSession) -> dict[str, Any]:
         "tool_activity": [asdict(a) for a in session.tool_activity[-12:]],
         "escalations": list(session.escalations),
         "camera_on": session.camera_on,
+        "status": session.status,
+        "pipeline_route": session.pipeline_route,
+        "route_frozen": session.frozen_route is not None,
+        "route_override": session.route_override,
+        "override_reason": session.override_reason,
         "evidence": [
             {
                 "capture_id": c.capture_id,
@@ -39,7 +45,7 @@ def session_view(session: ClaimSession) -> dict[str, Any]:
                 "claimant_claim": c.claimant_claim,
                 "document_types": [t.value for t in c.document_types],
                 "source": c.source,
-                "url": f"/api/claims/{session.id}/evidence/{c.capture_id}",
+                "url": f"{evidence_url_prefix}/{c.capture_id}",
             }
             for c in session.captures
         ],
@@ -47,6 +53,7 @@ def session_view(session: ClaimSession) -> dict[str, Any]:
     if result is None:
         view.update(
             route=None,
+            fact_sources={},
             claim_type=None,
             severity=None,
             rationale="",
@@ -63,7 +70,8 @@ def session_view(session: ClaimSession) -> dict[str, Any]:
 
     facts, decision, policy = result.facts, result.decision, result.policy
     view.update(
-        route=decision.route.value,
+        route=session.effective_route,
+        fact_sources={src.field: src.source_turn_ids for src in facts.fact_sources},
         claim_type=result.classification.claim_type.value,
         severity=result.classification.severity.value,
         rationale=result.classification.rationale,

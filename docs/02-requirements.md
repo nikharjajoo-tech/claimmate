@@ -107,7 +107,7 @@ The conversation never blocks waiting for a tool.
 | Extraction / verification | Gemini Flash with structured output |
 | Pipeline orchestration | LangGraph |
 | Backend | Python 3.12, FastAPI, WebSockets, Pydantic v2 |
-| DB | SQLite for dev → Postgres in Docker (SQLModel / SQLAlchemy) |
+| DB | SQLite in M6 → Turso hosted in M7, fallback Postgres; SQLAlchemy 2.0 async + Alembic (PRD D7) |
 | Frontend | React + Vite + TypeScript (claimant call page + adjuster dashboard) |
 | Testing / eval | pytest, custom eval runner, Vitest for client audio/state logic |
 | DevOps | Docker Compose, GitHub Actions |

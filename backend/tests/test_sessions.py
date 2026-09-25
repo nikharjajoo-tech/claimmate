@@ -4,7 +4,9 @@ from datetime import date
 import pytest
 
 from app.services import sessions as sessions_module
-from app.services.sessions import ClaimService, ClaimSession, SessionError, SessionStore
+from app.services import store as store_module
+from app.services.sessions import ClaimService, ClaimSession, SessionError
+from app.services.store import SessionStore
 from app.services.view import session_view
 from tests.fakes import fake_runner
 
@@ -105,30 +107,38 @@ async def test_pipeline_error_is_recorded():
     assert not session.processing
 
 
-def test_store_enforces_ownership_and_limits(monkeypatch):
+async def test_store_enforces_ownership_and_limits(monkeypatch):
     store = SessionStore()
-    session = store.create("alice")
+    session = await store.create("alice")
     assert session.turns[0].speaker == "agent"  # greeting
-    assert store.get(session.id, "alice") is session
+    assert await store.get(session.id, "alice") is session
     for owner in ("bob", None, ""):
         with pytest.raises(SessionError) as exc:
-            store.get(session.id, owner)
+            await store.get(session.id, owner)
         assert exc.value.status == 404
 
-    monkeypatch.setattr(sessions_module, "MAX_SESSIONS_PER_OWNER", 2)
-    store.create("alice")
+    monkeypatch.setattr(store_module, "MAX_SESSIONS_PER_OWNER", 2)
+    await store.create("alice")
     with pytest.raises(SessionError) as exc:
-        store.create("alice")
+        await store.create("alice")
     assert exc.value.status == 429
 
 
-def test_store_expires_idle_sessions(monkeypatch):
+async def test_idle_intakes_are_submitted_or_discarded():
     store = SessionStore()
-    session = store.create("alice")
-    session.updated_at -= sessions_module.SESSION_TTL_S + 1
+    talked = await store.create("alice")
+    talked.add_turn("claimant", "My basement flooded")
+    silent = await store.create("alice")
+    for s in (talked, silent):
+        s.updated_at -= sessions_module.SESSION_TTL_S + 1
+
     with pytest.raises(SessionError) as exc:
-        store.get(session.id, "alice")
+        await store.get(talked.id, "alice")
     assert exc.value.status == 410
+    assert talked.status == "submitted"  # handed to the adjuster, not lost
+
+    assert await store.sweep() == 1
+    assert silent.deleted  # nothing was said: nothing to keep
     assert len(store) == 0
 
 

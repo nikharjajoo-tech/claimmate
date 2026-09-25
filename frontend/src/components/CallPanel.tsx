@@ -7,6 +7,8 @@ interface Props {
   call: CallStatus;
   busy: boolean;
   micOn: boolean;
+  submitted: boolean;
+  onNewClaim: () => void;
   cameraOn: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onStart: () => void;
@@ -25,8 +27,8 @@ const STATUS_TEXT: Record<CallStatus, string> = {
 };
 
 export function CallPanel(props: Props) {
-  const { transcript, call, busy, micOn, cameraOn, videoRef, onStart, onEnd, onSend, onCamera, onCapture, onUpload } =
-    props;
+  const { transcript, call, busy, micOn, submitted, onNewClaim, cameraOn, videoRef, onStart, onEnd, onSend, onCamera,
+    onCapture, onUpload } = props;
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -52,7 +54,7 @@ export function CallPanel(props: Props) {
           {STATUS_TEXT[call]}
           {call === "live" && (micOn ? " · listening" : " · mic off")}
         </div>
-        {live ? (
+        {submitted ? null : live ? (
           <button className="btn btn-danger" onClick={onEnd}>
             End call
           </button>
@@ -63,7 +65,17 @@ export function CallPanel(props: Props) {
         )}
       </header>
 
-      <div className="media-bar">
+      {submitted && (
+        <div className="banner banner-ok" role="status">
+          <strong>Claim submitted for review.</strong> An adjuster will review it and follow up. You can still
+          download the packet.{" "}
+          <button className="btn btn-small" onClick={onNewClaim}>
+            Start a new claim
+          </button>
+        </div>
+      )}
+
+      <div className="media-bar" hidden={submitted}>
         {call === "live" && (
           <button className="btn btn-small" onClick={onCamera} aria-pressed={cameraOn}>
             {cameraOn ? "Stop camera" : "Show camera"}
@@ -107,7 +119,7 @@ export function CallPanel(props: Props) {
         <div ref={endRef} />
       </ol>
 
-      <form className="composer" onSubmit={submit}>
+      <form className="composer" onSubmit={submit} hidden={submitted}>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

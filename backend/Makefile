@@ -1,4 +1,4 @@
-.PHONY: install test eval eval-smoke serve
+.PHONY: install test eval eval-smoke serve migrate
 
 PY := .venv/bin/python
 
@@ -16,3 +16,6 @@ eval:
 
 serve:
 	$(PY) -m uvicorn app.api.main:app --reload --port 8000
+
+migrate:
+	$(PY) -m alembic upgrade head

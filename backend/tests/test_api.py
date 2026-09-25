@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import io
+import zipfile
 from dataclasses import replace
 from datetime import date
 
@@ -9,7 +11,10 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.api.main import OWNER_COOKIE, create_app
 from app.config import get_settings
-from app.services.sessions import ClaimService, SessionStore
+from app.services.sessions import ClaimService
+from app.services.store import SessionStore
+from app.storage.db import create_all, make_engine, make_sessionmaker
+from app.storage.repository import ClaimRepository
 from tests.fakes import fake_runner
 
 ORIGIN = {"origin": "http://localhost:5173"}
@@ -45,11 +50,13 @@ async def echo_connect():
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     settings = replace(get_settings(), google_api_key="test")
+    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
+    asyncio.run(create_all(engine))
     app = create_app(
         settings=settings,
-        store=SessionStore(),
+        store=SessionStore(ClaimRepository(make_sessionmaker(engine), tmp_path / "evidence")),
         service=ClaimService(fake_runner(), today=lambda: date(2026, 9, 24)),
         live_connect=echo_connect,
     )
@@ -90,7 +97,9 @@ def test_typed_mode_runs_pipeline_and_agent_replies(client):
     assert state["transcript"][-1]["text"] == state["next_question"]
 
     packet = client.get(f"/api/claims/{claim['id']}/packet")
-    assert packet.status_code == 200 and "# Claim Intake Packet" in packet.text
+    assert packet.status_code == 200 and packet.headers["content-type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(packet.content)).namelist()
+    assert names == ["claim.md", "transcript.md", "evidence.json"]
 
 
 def test_duplicate_message_id_is_idempotent(client):
@@ -107,10 +116,19 @@ def test_message_validation_and_packet_before_facts(client):
     assert client.get(f"/api/claims/{claim['id']}/packet").status_code == 409
 
 
-def test_delete(client):
-    claim = new_claim(client)
-    assert client.delete(f"/api/claims/{claim['id']}").json() == {"deleted": True}
-    assert client.get(f"/api/claims/{claim['id']}").status_code == 404
+def test_new_claim_discards_empty_and_submits_real_intakes(client):
+    empty = new_claim(client)
+    assert client.delete(f"/api/claims/{empty['id']}").json() == {"status": "discarded"}
+    assert client.get(f"/api/claims/{empty['id']}").status_code == 404
+
+    real = new_claim(client)
+    client.post(f"/api/claims/{real['id']}/messages", json={"text": "Basement flooded"})
+    assert client.delete(f"/api/claims/{real['id']}").json() == {"status": "submitted"}
+    # D5: no more changes, but the claimant can still read their own claim and download the packet
+    response = client.post(f"/api/claims/{real['id']}/messages", json={"text": "one more thing"})
+    assert response.status_code == 410 and "submitted for review" in response.text
+    assert client.get(f"/api/claims/{real['id']}").json()["state"]["status"] == "submitted"
+    assert client.get(f"/api/claims/{real['id']}/packet").status_code == 200
 
 
 def test_websocket_rejects_foreign_origin_and_wrong_owner(client):

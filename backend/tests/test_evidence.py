@@ -13,7 +13,8 @@ from app.domain.models import DocumentType
 from app.llm.client import LLMCall, LLMResult
 from app.services import evidence as evidence_module
 from app.services.evidence import FrameCheck, fresh_frame, verify_and_record
-from app.services.sessions import ClaimService, ClaimSession, SessionError, SessionStore
+from app.services.sessions import ClaimService, ClaimSession, SessionError
+from app.services.store import SessionStore
 from tests.fakes import fake_runner
 from tests.test_live_relay import eventually
 

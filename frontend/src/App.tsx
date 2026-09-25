@@ -29,6 +29,10 @@ function recall(): string | null {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [claimId, setClaimId] = useState<string | null>(null);
+  const currentClaim = useRef<string | null>(null);
+  useEffect(() => {
+    currentClaim.current = claimId;
+  }, [claimId]);
   const [micOn, setMicOn] = useState(false);
   const live = useRef<LiveConnection | null>(null);
   const mic = useRef<MicCapture | null>(null);
@@ -69,6 +73,15 @@ export default function App() {
     if (notify) live.current?.send({ type: "camera", enabled: false });
   }, []);
 
+  const refreshClaim = useCallback(async (id: string) => {
+    try {
+      const result = await api.getClaim(id);
+      if (currentClaim.current === id) dispatch({ type: "claim", claim: result.state }); // ignore if replaced
+    } catch {
+      // the next action will surface any problem
+    }
+  }, []);
+
   const endCall = useCallback(() => {
     stopCamera(true);
     stopMic();
@@ -77,7 +90,9 @@ export default function App() {
     live.current = null;
     player.current.stop();
     dispatch({ type: "call", status: "ended" });
-  }, [stopCamera]);
+    // Ending the call submits the claim; the server finishes that as the connection closes.
+    if (claimId) window.setTimeout(() => void refreshClaim(claimId), 800);
+  }, [stopCamera, claimId, refreshClaim]);
 
   const onServerMessage = useCallback((message: ServerMessage) => {
     if (message.type === "audio") player.current.play(message.data);
@@ -178,16 +193,22 @@ export default function App() {
     endCall();
     if (claimId) await api.deleteClaim(claimId).catch(() => undefined);
     remember(null);
-    dispatch({ type: "call", status: "idle" });
+    dispatch({ type: "reset" }); // nothing from the old claim may leak into the new one
     await loadClaim(false);
   };
 
+  // Leaving the page releases the mic and camera. This is not an explicit "End call", so the
+  // claim stays open and the claimant can reconnect (workflow 5).
   useEffect(
     () => () => {
-      if (live.current) endCall(); // leaving the page ends an active call and releases the mic
+      camera.current?.stop();
+      mic.current?.stop();
+      live.current?.close();
     },
-    [endCall],
+    [],
   );
+
+  const submitted = !!state.claim && state.claim.status !== "intake";
 
   return (
     <div className="app">
@@ -200,6 +221,9 @@ export default function App() {
           <span className="muted">Report a claim by talking</span>
         </div>
         <div className="actions">
+          <a className="btn" href="#/adjuster">
+            Adjuster view
+          </a>
           {claimId && state.claim?.packet_markdown && (
             <a className="btn" href={api.packetUrl(claimId)} download>
               Download packet
@@ -223,6 +247,8 @@ export default function App() {
           call={state.call}
           busy={state.busy}
           micOn={micOn}
+          submitted={submitted}
+          onNewClaim={newClaim}
           cameraOn={cameraOn}
           videoRef={videoRef}
           onStart={startCall}

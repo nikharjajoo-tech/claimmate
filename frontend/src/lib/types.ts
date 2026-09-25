@@ -29,6 +29,30 @@ export interface EvidenceItem {
   url: string;
 }
 
+export type ClaimStatus = "intake" | "submitted" | "in_review" | "awaiting_docs" | "closed";
+
+export interface QueueItem {
+  id: string;
+  status: ClaimStatus;
+  route: Route | null;
+  pipeline_route: Route | null;
+  overridden: boolean;
+  claim_type: string | null;
+  severity: string | null;
+  claimant_name: string | null;
+  created_at: string;
+  updated_at: string;
+  submitted_at: string | null;
+  live: boolean;
+}
+
+export interface AuditEntry {
+  at: string;
+  actor: "system" | "agent" | "claimant" | "adjuster";
+  action: string;
+  detail: string;
+}
+
 export type Route =
   | "emergency_escalation"
   | "special_investigation"
@@ -48,6 +72,12 @@ export interface ClaimView {
   escalations: string[];
   camera_on: boolean;
   evidence: EvidenceItem[];
+  status: ClaimStatus;
+  pipeline_route: Route | null;
+  route_frozen: boolean;
+  route_override: Route | null;
+  override_reason: string | null;
+  fact_sources: Record<string, string[]>;
   route: Route | null;
   claim_type: string | null;
   severity: string | null;

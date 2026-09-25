@@ -42,6 +42,7 @@ from app.live.tools import headline, scheduling, summarize_for_agent
 from app.llm.client import StructuredLLM
 from app.services.evidence import capture_summary, fresh_frame, is_jpeg, verify_and_record
 from app.services.sessions import ClaimService, ClaimSession, SessionError, ToolActivity
+from app.services.store import SessionStore
 from app.services.view import session_view
 
 logger = logging.getLogger(__name__)
@@ -97,8 +98,11 @@ class LiveRelay:
         model_name: str = "",
         max_seconds: float = MAX_CALL_SECONDS,
         vision: StructuredLLM | None = None,
+        store: SessionStore | None = None,
     ) -> None:
         self.vision = vision
+        self.store = store
+        self.ended_by_claimant = False
         self.session = session
         self.service = service
         self.browser = browser
@@ -124,6 +128,15 @@ class LiveRelay:
         async with self._send_lock:
             await self.browser.send_json(payload)
 
+    async def persist(self) -> None:
+        """Write progress to the database. A storage failure must never drop the live call."""
+        if self.store is None:
+            return
+        try:
+            await self.store.save(self.session)
+        except Exception:
+            logger.exception("could not save claim %s", self.session.id)
+
     async def send_state(self) -> None:
         await self.send({"type": "state", "state": session_view(self.session)})
 
@@ -148,6 +161,7 @@ class LiveRelay:
         if turn is None:
             return
         await self.send({"type": "transcript", "speaker": speaker, "id": turn.id, "text": turn.text, "final": True})
+        await self.persist()
         if speaker == "claimant":
             self.request_update()
 
@@ -170,6 +184,7 @@ class LiveRelay:
             await self.send({"type": "error", "message": "The claim update failed. The conversation is saved; it will retry on the next turn."})
             await self.send_state()
             return None
+        await self.persist()
         await self.send_state()
         return result
 
@@ -195,6 +210,7 @@ class LiveRelay:
             return await self.capture(str(args.get("caller_says_it_shows", "")), source="agent"), False
         if name == "escalate_to_human":
             self.session.escalate(str(args.get("reason", "")))
+            await self.persist()
             self.request_update()
             return {
                 "flagged": True,
@@ -212,6 +228,7 @@ class LiveRelay:
             result = await verify_and_record(self.session, self.vision, frame, claimant_claim=claim, source=source)
         except SessionError as exc:
             return {"captured": False, "message": str(exc)}
+        await self.persist()
         self.request_update()
         await self.send_state()
         return capture_summary(result.capture)
@@ -354,6 +371,7 @@ class LiveRelay:
             raw = await self.browser.receive_text()
             try:
                 if not await self.handle_client_message(raw, live):
+                    self.ended_by_claimant = True  # "End call", as opposed to a dropped connection
                     await self.finalize("claimant")
                     await self.finalize("agent")
                     return
@@ -440,3 +458,13 @@ class LiveRelay:
             self.session.live_connected = False
             self.session.set_camera(False)
             self.session.touch()
+            if self.store is not None:
+                try:
+                    if self.ended_by_claimant:
+                        # Explicit hang-up submits the claim. A dropped connection stays in intake so the
+                        # claimant can reconnect; the idle sweep submits it after 30 minutes.
+                        await self.store.finish(self.session, "claimant ended the call")
+                    else:
+                        await self.store.save(self.session)
+                except Exception:
+                    logger.exception("could not save claim %s at call end", self.session.id)

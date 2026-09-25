@@ -49,6 +49,11 @@ During a call, **Show camera** lets the agent see the damage; it describes what 
 saves the frame as evidence. Every photo (camera capture or **Upload photo**) is re-checked by a
 separate vision model and marked confirmed only if it really shows what the claimant described.
 
+**Adjuster view:** set `CLAIMVOICE_ADJUSTER_PASSCODE` in `.env`, restart, and open
+**http://localhost:8000/#/adjuster**. Claims appear in a queue with urgent ones first; opening a claim
+starts review and freezes its route, and every action lands in the audit trail. Claims are stored in
+SQLite (`backend/data/`), so they survive restarts; the schema is managed with Alembic (`make migrate`).
+
 For frontend development with hot reload, run `make serve` in `backend/` and `npm run dev` in
 `frontend/`, then open http://localhost:5173 (Vite proxies `/api` and `/ws` to the backend).
 
@@ -73,9 +78,10 @@ backend/
   app/rules/       deterministic rules engine + rules.yaml
   app/llm/         Gemini + Groq clients: retries, fallback chain, circuit breaker
   app/pipeline/    LangGraph claim pipeline, prompts, packet builder
-  app/services/    claim sessions (revision-cached pipeline runs), UI view
+  app/services/    claim sessions, lifecycle, evidence, store, UI view
+  app/storage/     SQLAlchemy models, repository, migrations runner (Alembic in migrations/)
   app/live/        Gemini Live config, tools, WebSocket relay
-  app/api/         FastAPI app
+  app/api/         FastAPI app + adjuster API
   app/eval/        eval harness; scenarios in eval/scenarios/*.yaml
 frontend/src/      React + TypeScript call page and claim notebook
 docs/              PRD, requirements, reference analysis, how it works

@@ -11,7 +11,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from app.domain.models import EvidenceCapture
@@ -49,6 +49,13 @@ class ToolActivity:
 
 
 @dataclass
+class AuditEvent:
+    actor: str  # system | agent | claimant | adjuster
+    action: str
+    detail: str = ""
+
+
+@dataclass
 class ClaimSession:
     id: str
     owner: str
@@ -71,6 +78,31 @@ class ClaimSession:
     created_at: float = field(default_factory=time.monotonic)
     updated_at: float = field(default_factory=time.monotonic)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Lifecycle (see services/lifecycle.py)
+    status: str = "intake"
+    frozen_route: str | None = None
+    route_override: str | None = None
+    override_reason: str | None = None
+    submitted_at: datetime | None = None
+    pending_audit: list[AuditEvent] = field(default_factory=list)
+    # What the repository has already written, so saves only add what's new
+    persisted: bool = False
+    persisted_turn_ids: set[str] = field(default_factory=set)
+    persisted_capture_ids: set[str] = field(default_factory=set)
+    persisted_result_revision: int = -1
+    persisted_escalations: int = 0
+
+    @property
+    def pipeline_route(self) -> str | None:
+        return self.result.decision.route.value if self.result else None
+
+    @property
+    def effective_route(self) -> str | None:
+        """What the adjuster queue shows: an override wins, then a review freeze, then the pipeline."""
+        return self.route_override or self.frozen_route or self.pipeline_route
+
+    def audit(self, actor: str, action: str, detail: str = "") -> None:
+        self.pending_audit.append(AuditEvent(actor, action, detail))
 
     def touch(self) -> None:
         self.updated_at = time.monotonic()
@@ -155,43 +187,3 @@ class ClaimService:
                     continue  # the claimant spoke while we ran: this result is already stale
                 session.result, session.result_revision = result, revision
                 return result
-
-
-class SessionStore:
-    def __init__(self) -> None:
-        self._sessions: dict[str, ClaimSession] = {}
-
-    def create(self, owner: str) -> ClaimSession:
-        self.sweep()
-        if len(self._sessions) >= MAX_SESSIONS:
-            raise SessionError(429, "The server is at capacity. Try again later.")
-        if sum(s.owner == owner for s in self._sessions.values()) >= MAX_SESSIONS_PER_OWNER:
-            raise SessionError(429, "Too many open intakes. Close one before starting another.")
-        session = ClaimSession(id=uuid.uuid4().hex, owner=owner)
-        session.add_turn("agent", GREETING, turn_id="t0")
-        self._sessions[session.id] = session
-        return session
-
-    def get(self, session_id: str, owner: str | None) -> ClaimSession:
-        session = self._sessions.get(session_id)
-        if session is None or session.deleted or not owner or not secrets.compare_digest(session.owner, owner):
-            raise SessionError(404, "Intake not found or expired. Start a new intake.")
-        if time.monotonic() - session.updated_at > SESSION_TTL_S:
-            self.delete(session)
-            raise SessionError(410, "Intake expired. Start a new intake.")
-        session.touch()
-        return session
-
-    def delete(self, session: ClaimSession) -> None:
-        session.deleted = True
-        self._sessions.pop(session.id, None)
-
-    def sweep(self) -> int:
-        now = time.monotonic()
-        expired = [s for s in self._sessions.values() if now - s.updated_at > SESSION_TTL_S and not s.live_connected]
-        for session in expired:
-            self.delete(session)
-        return len(expired)
-
-    def __len__(self) -> int:
-        return len(self._sessions)

@@ -3,6 +3,10 @@
 > **Status: APPROVED 2026-09-25.** Workflows 1–5 and 7 describe what is built (M1–M5).
 > Workflow 6 (adjuster) is the approved scope for Milestone 6. The decisions below were approved with
 > their defaults and are recorded in the [PRD](00-PRD.md#15-decisions-and-open-questions) as D2–D5.
+>
+> **Built in M6 (2026-09-25).** Two details were settled during the build: only an explicit **End call**
+> submits a claim (a dropped connection can reconnect), and **New claim** submits a claim that has content
+> instead of deleting it.
 
 | # | Workflow | Who | Status |
 |---|---|---|---|
@@ -69,7 +73,7 @@ sequenceDiagram
 | 4 | Keeps talking | Agent confirms the policy mid-conversation | `lookup_policy` runs in the background (instant) |
 | 5 | Answers follow-ups | Notebook fields fill in; checklist appears; route stamp | Pipeline re-runs after each new claimant turn (~2–3 s) |
 | 6 | Can interrupt anytime | Agent stops speaking immediately | Queued agent audio is cut on barge-in |
-| 7 | Clicks **End call** | "Call ended"; notebook stays | Session kept 30 min; packet downloadable |
+| 7 | Clicks **End call** | "Claim submitted for review"; notebook stays readable | Claim moves to the adjuster queue; packet still downloadable |
 
 **What the agent will never do:** promise coverage, payment, or amounts; treat its own guesses as
 facts; follow instructions the caller reads aloud or shows on camera.
@@ -157,12 +161,12 @@ flowchart TD
 | What goes wrong | What the claimant experiences | Recovery |
 |---|---|---|
 | Microphone denied | "Microphone unavailable. You can still type…" | Typing works; agent still answers aloud |
-| Connection drops / tab refreshed | Status "Call ended" | Click **Talk** again: same claim, conversation restored |
+| Connection drops / tab refreshed | Status "Call ended" | Click **Talk** again: same claim, conversation restored (only **End call** submits the claim) |
 | Call reaches 15 minutes | "Call time limit reached. Reconnect to continue." | Reconnect continues the same claim |
-| Idle 30 minutes | "Intake expired. Start a new intake." | Start a new claim (data from the old one is gone today; persistence is M6) |
+| Idle 30 minutes | "Intake expired. Start a new intake." | The idle claim is submitted to the adjuster queue; start a new claim |
 | AI provider overloaded | Brief delay; usually invisible | Retries → fallback models → other provider |
 | Claims team fails completely | "The claim update failed… it will retry on the next turn." | Next message retries |
-| Wants to start over | Clicks **New claim** | Old claim deleted, fresh session |
+| Wants to start over | Clicks **New claim** | The old claim is submitted if it has content (never thrown away), otherwise discarded; fresh session |
 
 ---
 

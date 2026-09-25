@@ -21,6 +21,7 @@ export const initialState: AppState = {
 };
 
 export type Action =
+  | { type: "reset" }
   | { type: "claim"; claim: ClaimView }
   | { type: "server"; message: ServerMessage }
   | { type: "call"; status: CallStatus }
@@ -48,6 +49,8 @@ export function upsertTool(tools: ToolActivity[], tool: ToolActivity): ToolActiv
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "reset":
+      return initialState;
     case "claim":
       return {
         ...state,

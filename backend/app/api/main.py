@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import contextlib
@@ -28,7 +29,13 @@ from app.llm.client import StructuredLLM
 from app.llm.factory import make_pipeline_llm, make_vision_llm
 from app.pipeline.graph import build_graph, run_pipeline
 from app.services.evidence import capture_summary, verify_and_record
-from app.services.sessions import ClaimService, SessionError, SessionStore
+from app.api.adjuster import adjuster_router
+from app.services.packet_zip import build_packet_zip
+from app.services.sessions import ClaimService, SessionError
+from app.services.store import SessionStore
+from app.storage.db import make_engine, make_sessionmaker
+from app.storage.migrate import upgrade_to_head
+from app.storage.repository import ClaimRepository
 from app.services.view import session_view
 
 logger = logging.getLogger(__name__)
@@ -80,12 +87,35 @@ def create_app(
     vision: StructuredLLM | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    store = store or SessionStore()
+    engine = None
+    if store is None:  # production wiring: SQLite (or any SQLAlchemy URL) plus evidence files on disk
+        engine = make_engine(settings.database_url)
+        store = SessionStore(ClaimRepository(make_sessionmaker(engine), settings.evidence_dir))
     service = service or ClaimService(lazy_pipeline_runner(settings))
     live_connect = live_connect or gemini_connect_factory(settings)
     allowed_origins = [o.strip() for o in os.getenv("CLAIMVOICE_ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",") if o.strip()]
 
-    app = FastAPI(title="ClaimVoice API")
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if engine is not None:
+            await asyncio.to_thread(upgrade_to_head, settings.database_url)
+
+        async def sweep_forever():
+            while True:
+                await asyncio.sleep(60)
+                await store.sweep()  # idle intakes are submitted to the adjuster queue
+
+        sweeper = asyncio.create_task(sweep_forever())
+        try:
+            yield
+        finally:
+            sweeper.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await sweeper
+            if engine is not None:
+                await engine.dispose()
+
+    app = FastAPI(title="ClaimVoice API", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -121,43 +151,49 @@ def create_app(
         }
 
     @app.post("/api/claims", status_code=201)
-    def create_claim(request: Request, response: Response) -> dict[str, Any]:
+    async def create_claim(request: Request, response: Response) -> dict[str, Any]:
         owner = owner_of(request) or secrets.token_urlsafe(32)
-        session = store.create(owner)
+        session = await store.create(owner)
         response.set_cookie(
             OWNER_COOKIE, owner, httponly=True, samesite="strict", secure=request.url.scheme == "https", max_age=24 * 3600
         )
         return {"id": session.id, "state": session_view(session)}
 
     @app.get("/api/claims/{claim_id}")
-    def get_claim(claim_id: str, request: Request) -> dict[str, Any]:
-        return {"id": claim_id, "state": session_view(store.get(claim_id, owner_of(request)))}
+    async def get_claim(claim_id: str, request: Request) -> dict[str, Any]:
+        return {"id": claim_id, "state": session_view(await store.get(claim_id, owner_of(request), readonly=True))}
 
     @app.delete("/api/claims/{claim_id}")
-    def delete_claim(claim_id: str, request: Request) -> dict[str, bool]:
-        store.delete(store.get(claim_id, owner_of(request)))
-        return {"deleted": True}
+    async def finish_claim(claim_id: str, request: Request) -> dict[str, str]:
+        """Claimant starts over. A claim with content is submitted for review, never thrown away."""
+        session = await store.get(claim_id, owner_of(request))
+        if session.live_connected:
+            raise HTTPException(409, "End the live call first.")
+        await store.finish(session, "claimant started a new claim")
+        return {"status": "submitted" if session.status == "submitted" else "discarded"}
 
     @app.post("/api/claims/{claim_id}/messages")
     async def post_message(claim_id: str, body: MessageIn, request: Request) -> dict[str, Any]:
         """Typed mode: no microphone or Live quota needed. The agent replies with the next question."""
-        session = store.get(claim_id, owner_of(request))
+        session = await store.get(claim_id, owner_of(request))
         if session.live_connected:
             raise HTTPException(409, "A live call is active; send text through the call instead.")
         if session.add_turn("claimant", body.text, turn_id=body.id) is None:
             return {"id": claim_id, "state": session_view(session)}  # duplicate delivery
+        await store.save(session)  # the message is durable before any model call
         try:
             result = await service.refresh(session)
         except Exception as exc:
             logger.exception("pipeline failed")
             raise HTTPException(503, "The claims team is unavailable right now. Your message was saved.") from exc
         session.add_turn("agent", result.packet.next_question)
+        await store.save(session)
         return {"id": claim_id, "state": session_view(session)}
 
     @app.post("/api/claims/{claim_id}/evidence", status_code=201)
     async def upload_evidence(claim_id: str, body: EvidenceIn, request: Request) -> dict[str, Any]:
         """Photo upload for typed mode (no live camera needed). Verified like a camera capture."""
-        session = store.get(claim_id, owner_of(request))
+        session = await store.get(claim_id, owner_of(request))
         try:
             image = base64.b64decode(body.data, validate=True)
         except (binascii.Error, ValueError) as exc:
@@ -178,25 +214,27 @@ def create_app(
             logger.exception("pipeline failed after evidence upload")
         summary = capture_summary(result.capture)
         session.add_turn("agent", f"Thanks, I've added that photo. I can see: {result.capture.caption}")
+        await store.save(session)
         return {"id": claim_id, "capture": summary, "state": session_view(session)}
 
     @app.get("/api/claims/{claim_id}/evidence/{capture_id}")
-    def get_evidence(claim_id: str, capture_id: str, request: Request) -> Response:
-        session = store.get(claim_id, owner_of(request))
+    async def get_evidence(claim_id: str, capture_id: str, request: Request) -> Response:
+        session = await store.get(claim_id, owner_of(request), readonly=True)
         image = session.evidence_images.get(capture_id)
         if image is None:
             raise HTTPException(404, "No such evidence.")
         return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
     @app.get("/api/claims/{claim_id}/packet")
-    def download_packet(claim_id: str, request: Request) -> Response:
-        session = store.get(claim_id, owner_of(request))
+    async def download_packet(claim_id: str, request: Request) -> Response:
+        """ZIP with the packet, transcript, evidence manifest, and photos."""
+        session = await store.get(claim_id, owner_of(request), readonly=True)
         if session.result is None:
             raise HTTPException(409, "No claim packet yet. Describe the loss first.")
         return Response(
-            session.result.packet.markdown,
-            media_type="text/markdown",
-            headers={"Content-Disposition": f'attachment; filename="claim-{claim_id[:8]}.md"'},
+            build_packet_zip(session),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="claim-{claim_id[:8]}.zip"'},
         )
 
     @app.websocket("/ws/claims/{claim_id}/live")
@@ -206,7 +244,7 @@ def create_app(
             await websocket.close(code=1008)
             return
         try:
-            session = store.get(claim_id, websocket.cookies.get(OWNER_COOKIE))
+            session = await store.get(claim_id, websocket.cookies.get(OWNER_COOKIE))
         except SessionError:
             await websocket.close(code=1008)
             return
@@ -218,7 +256,9 @@ def create_app(
             await websocket.send_json({"type": "error", "message": "GOOGLE_API_KEY is not set on the server."})
             await websocket.close()
             return
-        relay = LiveRelay(session, service, websocket, live_connect, model_name=settings.live_model, vision=get_vision())
+        relay = LiveRelay(
+            session, service, websocket, live_connect, model_name=settings.live_model, vision=get_vision(), store=store
+        )
         try:
             await relay.run()
         except WebSocketDisconnect:
@@ -230,6 +270,8 @@ def create_app(
         finally:
             with contextlib.suppress(Exception):
                 await websocket.close()
+
+    app.include_router(adjuster_router(settings, store))
 
     if FRONTEND_DIST.is_dir():
         app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

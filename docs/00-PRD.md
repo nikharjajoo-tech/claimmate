@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Owner** | Nikhar |
-| **Status** | In development (M1–M5 complete) |
+| **Status** | In development (M1–M6 complete) |
 | **Last updated** | 2026-09-25 |
 | **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) · [User workflows](05-user-workflows.md) · [Eval results](04-eval-results.md) |
 
@@ -135,8 +135,8 @@ Priority: **P0** = required for MVP demo · **P1** = required for v1 · **P2** =
 | F5 | Live voice session (Gemini Live), barge-in, transcripts, typed fallback | P0 | M4 ✅ |
 | F6 | Non-blocking background tools with interrupt/idle scheduling | P0 | M4 ✅ |
 | F7 | Camera evidence capture with independent verification | P1 | M5 ✅ |
-| F8 | Persistent storage (claims, turns, evidence, audit) | P1 | M6 |
-| F9 | Adjuster dashboard: passcode sign-in, queue, claim detail, lifecycle actions, route override | P1 | M6 |
+| F8 | Persistent storage (claims, turns, evidence, audit) | P1 | M6 ✅ |
+| F9 | Adjuster dashboard: passcode sign-in, queue, claim detail, lifecycle actions, route override | P1 | M6 ✅ |
 | F10 | Security hardening, observability, PII redaction | P1 | M7 |
 | F11 | Docker Compose + CI | P1 | M7 |
 | F12 | Incident sketch generation (camera-off illustration) | P2 | — |
@@ -276,7 +276,7 @@ server → client: `ready`, `transcript`, `audio`, `interrupted`, `tool`, `state
 ## 12. Tech stack
 
 Python 3.12+ · FastAPI · WebSockets · Pydantic v2 · LangGraph · google-genai (Gemini Live + Flash) ·
-SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest · Docker Compose · GitHub Actions
+SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · React + Vite + TypeScript · pytest · Vitest · Docker Compose · GitHub Actions
 
 ## 13. Milestones
 
@@ -287,7 +287,7 @@ SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest 
 | M3 | Eval harness | 50 labeled scenarios in 9 categories, label consistency checks, oracle test, report + targets; 173 tests. Full baseline run pending free-tier quota | ✅ Built |
 | M4 | Live voice | WebSocket relay to Gemini Live, 3 non-blocking tools, revision-cached sessions, typed mode, Groq pipeline provider, React call page; 215 backend + 15 frontend tests; verified end to end against real Gemini Live (first audio 1.5–2.1 s) | ✅ Done |
 | M5 | Camera evidence | Live camera frames to the agent, `capture_evidence` tool, manual capture and photo upload, independent vision verification (Groq qwen3.8-27b → Gemini fallback), evidence gallery and packet section | ✅ Done |
-| M6 | Persistence + adjuster dashboard | SQLite/Postgres storage for claims, turns, evidence, findings, and audit; claim lifecycle with route freeze; passcode-protected adjuster queue, claim detail, status actions, route override; packet ZIP with photos (per [workflow 6](05-user-workflows.md#6-adjuster-review-and-act-on-a-claim-proposed)) | 🔄 Next |
+| M6 | Persistence + adjuster dashboard | SQLite via SQLAlchemy 2.0 async + Alembic (migrations applied at startup, drift-tested); incremental saves with derived audit events; claim lifecycle with route freeze; passcode sign-in (signed 8-hour cookie, rate-limited); queue, claim detail with fact-to-transcript highlighting, status actions, override; packet ZIP with photos. Verified on the live stack, including a server restart. 260 backend + 23 frontend tests | ✅ Done |
 | M7 | Hardening + ship | Security, observability, Docker, CI, README + demo video | ⏳ |
 
 ## 14. Risks and mitigations
@@ -312,6 +312,7 @@ SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest 
 | D4 | Adjuster sign-in: one shared demo passcode | 2026-09-25 |
 | D5 | Each intake is one claimant session in v1; returning with a claim reference code is v2 | 2026-09-25 |
 | D6 | Prompt and model changes ship only after beating the current version on the 50-scenario eval | 2026-09-25 |
+| D7 | Storage: local SQLite in M6 (SQLAlchemy 2.0 async + Alembic; evidence photos as files). Hosted database: **Turso** (SQLite-compatible), pending an M7 compatibility test that runs the full test suite through its `turso_serverless` driver; fallback PostgreSQL | 2026-09-25 |
 
 ### Open
 
