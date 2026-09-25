@@ -4,8 +4,8 @@
 |---|---|
 | **Owner** | Nikhar |
 | **Status** | In development (M1–M5 complete) |
-| **Last updated** | 2026-09-24 |
-| **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) |
+| **Last updated** | 2026-09-25 |
+| **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) · [User workflows](05-user-workflows.md) · [Eval results](04-eval-results.md) |
 
 ---
 
@@ -70,6 +70,8 @@ First Notice of Loss (FNOL) is the first contact after a loss, and it is slow an
 | C6 | If I mention an injury or danger, I'm told to contact emergency services and my claim is flagged urgent. | P0 |
 | C7 | At the end I hear a short summary and what happens next. | P0 |
 | C8 | If I disconnect, I can reconnect and continue the same claim. | P1 |
+| C9 | I can upload a photo without a live call, and it's verified like a camera capture. | P1 |
+| C10 | During a call I can capture the camera view as evidence myself, without waiting for the agent. | P1 |
 
 ### Adjuster
 | ID | Story | Priority |
@@ -80,6 +82,9 @@ First Notice of Loss (FNOL) is the first contact after a loss, and it is slow an
 | A4 | I see every rule that fired, and the audit trail. | P0 |
 | A5 | I can override the route with a reason, which is logged. | P1 |
 | A6 | I can export the claim packet (Markdown/PDF + evidence ZIP). | P2 |
+| A7 | I can move a claim through its lifecycle: in review, awaiting documents, closed. Each change is logged. | P1 |
+| A8 | Once I open a claim, its route stops changing automatically, so my decision is never silently overwritten. | P1 |
+| A9 | I sign in to the adjuster view with a passcode, so claimants can't reach it. | P1 |
 
 ### Operator
 | ID | Story | Priority |
@@ -88,22 +93,34 @@ First Notice of Loss (FNOL) is the first contact after a loss, and it is slow an
 | O2 | I see latency and token cost per claim. | P1 |
 | O3 | Logs never contain raw phone numbers or emails. | P1 |
 
-## 6. User journey (happy path)
+## 6. User workflows
 
-```
-Claimant clicks Talk
- → Agent: "Are you and everyone else safe?"
- → Claimant: "Yes. I'm Elena Brooks, policy HO-20417. The sump pump failed last night
-              and flooded the basement."
-      ├─ [background] lookup_policy       → active HO-3, water backup endorsement
-      └─ [background] update_claim        → facts extracted, route = needs_docs
- → Agent (when idle): "Thanks Elena, I found your homeowners policy. Can you show me the damage?"
- → Claimant turns on camera
-      └─ [background] capture_evidence    → frame verified: "standing water on carpet" ✓ confirmed
- → Agent: "I can see standing water across the carpet. I've added that photo…"
- → … contact info, mitigation invoice …
- → Agent summarizes; claim appears in the adjuster queue as "Needs docs — mitigation invoice"
-```
+The full workflows, with diagrams, are in [05-user-workflows.md](05-user-workflows.md) (approved
+2026-09-25): voice intake, typed intake, evidence, safety escalation, recovery, adjuster review, and
+shipping AI changes. The primary one, voice intake:
+
+| Step | Claimant does | Sees / hears | System does |
+|---|---|---|---|
+| 1 | Opens the page | Greeting: "Is everyone safe right now?" | Creates a claim tied to a browser cookie |
+| 2 | Clicks **Talk** | Mic prompt, then "Live · listening" | Opens the live voice connection |
+| 3 | Describes the loss | Words stream into the transcript; agent replies in ~1.5–2 s | Speech to text; agent answers aloud |
+| 4 | Keeps talking | Agent confirms the policy mid-conversation | `lookup_policy` runs in the background |
+| 5 | Answers follow-ups, shows the camera | Notebook fills in; photos verified; route stamp | Pipeline re-runs after each turn (~2–3 s) |
+| 6 | Interrupts at any time | Agent stops speaking at once | Queued agent audio is cut |
+| 7 | Ends the call | Two-sentence summary; packet downloadable | Claim moves to `submitted` and into the adjuster queue |
+
+### 6.1 Claim lifecycle
+
+`intake → submitted → in_review ⇄ awaiting_docs → closed`
+
+- **intake:** the claimant is active; the route updates automatically after every new fact.
+- **submitted:** the call ended or the claim was idle 30 minutes; waiting in the adjuster queue.
+- **in_review:** an adjuster opened it. **The route is frozen** and changes only by adjuster override.
+- **awaiting_docs:** the adjuster requested documents.
+- **closed:** decision recorded.
+
+Queue order: emergency escalation, special investigation, policy review, needs documents, ready for
+adjuster; oldest first within each.
 
 ## 7. Features and requirements
 
@@ -119,7 +136,7 @@ Priority: **P0** = required for MVP demo · **P1** = required for v1 · **P2** =
 | F6 | Non-blocking background tools with interrupt/idle scheduling | P0 | M4 ✅ |
 | F7 | Camera evidence capture with independent verification | P1 | M5 ✅ |
 | F8 | Persistent storage (claims, turns, evidence, audit) | P1 | M6 |
-| F9 | Adjuster dashboard: queue, detail view, route override | P1 | M6 |
+| F9 | Adjuster dashboard: passcode sign-in, queue, claim detail, lifecycle actions, route override | P1 | M6 |
 | F10 | Security hardening, observability, PII redaction | P1 | M7 |
 | F11 | Docker Compose + CI | P1 | M7 |
 | F12 | Incident sketch generation (camera-off illustration) | P2 | — |
@@ -208,9 +225,9 @@ All tools are **non-blocking**, so the agent keeps talking while they run.
 
 | Entity | Key fields |
 |---|---|
-| `Claim` | id, status, route, claim_type, severity, facts (JSON), created_at, updated_at |
+| `Claim` | id, status (`intake`/`submitted`/`in_review`/`awaiting_docs`/`closed`), route, route_frozen, route_override_reason, claim_type, severity, facts (JSON), created_at, updated_at |
 | `Turn` | id, claim_id, speaker, text, seq, created_at |
-| `EvidenceCapture` | id, claim_id, file_path, caption, claimant_statement, confirmed, document_types |
+| `EvidenceCapture` | id, claim_id, file_path, caption, claimant_claim, confirmed, document_types, source (agent/claimant/upload) |
 | `Finding` | claim_id, rule_id, severity, action, message, pipeline_run_id |
 | `AuditEvent` | claim_id, actor (system/adjuster), action, detail, created_at |
 | `PipelineRun` | id, claim_id, revision, latency_ms, tokens_in/out, model, status |
@@ -221,15 +238,20 @@ All tools are **non-blocking**, so the agent keeps talking while they run.
 |---|---|---|
 | POST | `/api/claims` | Start a claim session |
 | GET | `/api/claims/{id}` | Claim state (facts, route, checklist, evidence) |
-| POST | `/api/claims/{id}/messages` | Typed turn (non-live fallback) |
-| WS | `/ws/claims/{id}/live` | Live audio/video/text relay |
-| GET | `/api/adjuster/claims?route=&type=` | Adjuster queue |
-| POST | `/api/adjuster/claims/{id}/override` | Override route with reason |
-| GET | `/api/claims/{id}/packet` | Export packet ZIP |
-| GET | `/api/health` | Health + model config |
+| POST | `/api/claims/{id}/messages` | Typed turn (non-live fallback) ✅ |
+| POST | `/api/claims/{id}/evidence` | Upload a photo; verified like a capture ✅ |
+| GET | `/api/claims/{id}/evidence/{capture_id}` | Evidence image (owner only) ✅ |
+| GET | `/api/claims/{id}/packet` | Export packet (Markdown today; ZIP with photos in M6) ✅ |
+| WS | `/ws/claims/{id}/live` | Live audio/video/text relay ✅ |
+| POST | `/api/adjuster/login` | Passcode sign-in (M6) |
+| GET | `/api/adjuster/claims?status=&route=&type=` | Adjuster queue (M6) |
+| GET | `/api/adjuster/claims/{id}` | Claim detail: facts with sources, evidence, findings, audit, transcript (M6) |
+| POST | `/api/adjuster/claims/{id}/status` | Lifecycle change: in_review, awaiting_docs, closed (M6) |
+| POST | `/api/adjuster/claims/{id}/override` | Override route with a required reason (M6) |
+| GET | `/api/health` | Health + model config ✅ |
 
-WebSocket messages, client → server: `audio`, `video`, `text`, `camera_state`, `close`;
-server → client: `transcript`, `audio`, `interrupted`, `tool`, `state`, `error`.
+WebSocket messages, client → server: `audio`, `audio_end`, `text`, `camera`, `video`, `capture`, `close`;
+server → client: `ready`, `transcript`, `audio`, `interrupted`, `tool`, `state`, `error`.
 
 ## 10. AI safety and guardrails
 
@@ -265,7 +287,7 @@ SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest 
 | M3 | Eval harness | 50 labeled scenarios in 9 categories, label consistency checks, oracle test, report + targets; 173 tests. Full baseline run pending free-tier quota | ✅ Built |
 | M4 | Live voice | WebSocket relay to Gemini Live, 3 non-blocking tools, revision-cached sessions, typed mode, Groq pipeline provider, React call page; 215 backend + 15 frontend tests; verified end to end against real Gemini Live (first audio 1.5–2.1 s) | ✅ Done |
 | M5 | Camera evidence | Live camera frames to the agent, `capture_evidence` tool, manual capture and photo upload, independent vision verification (Groq qwen3.8-27b → Gemini fallback), evidence gallery and packet section | ✅ Done |
-| M6 | Persistence + dashboard | DB, adjuster queue/detail/override | 🔄 Next |
+| M6 | Persistence + adjuster dashboard | SQLite/Postgres storage for claims, turns, evidence, findings, and audit; claim lifecycle with route freeze; passcode-protected adjuster queue, claim detail, status actions, route override; packet ZIP with photos (per [workflow 6](05-user-workflows.md#6-adjuster-review-and-act-on-a-claim-proposed)) | 🔄 Next |
 | M7 | Hardening + ship | Security, observability, Docker, CI, README + demo video | ⏳ |
 
 ## 14. Risks and mitigations
@@ -278,8 +300,20 @@ SQLModel (SQLite → Postgres) · React + Vite + TypeScript · pytest · Vitest 
 | Pipeline cost from re-running on every turn | Medium | Revision cache; debounce; incremental extraction later |
 | Scope creep (dashboard, sketches) | Medium | P0/P1/P2 priorities; sketches deferred |
 
-## 15. Open questions
+## 15. Decisions and open questions
 
-1. Should the pipeline run after **every** claimant turn, or only when the agent calls `update_claim`? (Default: both, with caching, as in the reference.)
-2. PDF export in v1, or Markdown + ZIP only? (Default: Markdown + ZIP; PDF is P2.)
-3. Hosted demo (e.g. Render/Fly.io) for the resume link, or local + demo video only? (Decide at M7.)
+### Decided
+
+| # | Decision | Date |
+|---|---|---|
+| D1 | The pipeline runs after every claimant turn **and** when the agent calls `update_claim`, cached per transcript revision | 2026-09-24 |
+| D2 | Claim lifecycle: `intake → submitted → in_review ⇄ awaiting_docs → closed` | 2026-09-25 |
+| D3 | The automatic route freezes once an adjuster opens a claim; it changes only by override with a reason | 2026-09-25 |
+| D4 | Adjuster sign-in: one shared demo passcode | 2026-09-25 |
+| D5 | Each intake is one claimant session in v1; returning with a claim reference code is v2 | 2026-09-25 |
+| D6 | Prompt and model changes ship only after beating the current version on the 50-scenario eval | 2026-09-25 |
+
+### Open
+
+1. PDF export in v1, or Markdown + ZIP only? (Default: Markdown + ZIP; PDF is P2.)
+2. Hosted demo (e.g. Render/Fly.io) for the resume link, or local + demo video only? (Decide at M7.)
