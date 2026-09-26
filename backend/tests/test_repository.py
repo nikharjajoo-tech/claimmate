@@ -7,7 +7,8 @@ from sqlalchemy import func, select
 from app.domain.models import DocumentType, EvidenceCapture
 from app.services import lifecycle
 from app.services.sessions import ClaimService, ClaimSession, SessionError
-from app.storage.db import create_all, make_engine, make_sessionmaker
+from app.storage.db import make_sessionmaker
+from tests.dbutil import fresh_schema, make_test_engine
 from app.storage.models import AuditRow, FindingRow, PipelineRunRow, TurnRow
 from app.storage.repository import ClaimRepository
 from tests.fakes import INJURY_FACTS, FakeLLM, fake_runner
@@ -18,8 +19,8 @@ TODAY = lambda: date(2026, 9, 24)  # noqa: E731
 
 @pytest.fixture
 async def repo(tmp_path):
-    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
-    await create_all(engine)
+    engine = make_test_engine(tmp_path)
+    await fresh_schema(engine)
     repository = ClaimRepository(make_sessionmaker(engine), tmp_path / "evidence")
     yield repository
     await engine.dispose()

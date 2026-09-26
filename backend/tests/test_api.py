@@ -13,7 +13,8 @@ from app.api.main import OWNER_COOKIE, create_app
 from app.config import get_settings
 from app.services.sessions import ClaimService
 from app.services.store import SessionStore
-from app.storage.db import create_all, make_engine, make_sessionmaker
+from app.storage.db import make_sessionmaker
+from tests.dbutil import fresh_schema, make_test_engine
 from app.storage.repository import ClaimRepository
 from tests.fakes import fake_runner
 
@@ -52,8 +53,8 @@ async def echo_connect():
 @pytest.fixture
 def client(tmp_path):
     settings = replace(get_settings(), google_api_key="test")
-    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
-    asyncio.run(create_all(engine))
+    engine = make_test_engine(tmp_path, "api.db")
+    asyncio.run(fresh_schema(engine))
     app = create_app(
         settings=settings,
         store=SessionStore(ClaimRepository(make_sessionmaker(engine), tmp_path / "evidence")),

@@ -15,6 +15,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20",
     "alembic>=1.13",
+    "turso_serverless>=0.1.0",
+    "certifi",
 ]
 
 [project.optional-dependencies]

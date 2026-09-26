@@ -24,6 +24,7 @@ class Settings:
     pipeline_mode: str  # "split" (extract + classify) | "single" (one call)
     prompt_version: str  # promoted only after it beats the current version in the eval
     database_url: str
+    turso_auth_token: str
     evidence_dir: Path
     adjuster_passcode: str  # empty disables the adjuster API
     session_secret: str  # signs adjuster sessions; random per process if unset
@@ -61,7 +62,9 @@ def get_settings() -> Settings:
         pipeline_provider=os.getenv("CLAIMVOICE_PIPELINE_PROVIDER", "auto").strip().lower(),
         pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
         prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "v1").strip().lower(),
+        # CLAIMVOICE_DATABASE_URL may be a SQLAlchemy URL or a Turso libsql:// URL (decision D7).
         database_url=os.getenv("CLAIMVOICE_DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}"),
+        turso_auth_token=os.getenv("TURSO_AUTH_TOKEN", "").strip(),
         evidence_dir=Path(os.getenv("CLAIMVOICE_EVIDENCE_DIR", str(DATA_DIR / "evidence"))),
         adjuster_passcode=os.getenv("CLAIMVOICE_ADJUSTER_PASSCODE", "").strip(),
         session_secret=os.getenv("CLAIMVOICE_SESSION_SECRET", "").strip() or secrets.token_hex(32),

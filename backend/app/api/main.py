@@ -91,7 +91,7 @@ def create_app(
     settings = settings or get_settings()
     engine = None
     if store is None:  # production wiring: SQLite (or any SQLAlchemy URL) plus evidence files on disk
-        engine = make_engine(settings.database_url)
+        engine = make_engine(settings.database_url, turso_auth_token=settings.turso_auth_token)
         store = SessionStore(ClaimRepository(make_sessionmaker(engine), settings.evidence_dir))
     service = service or ClaimService(lazy_pipeline_runner(settings))
     live_connect = live_connect or gemini_connect_factory(settings)
@@ -100,7 +100,7 @@ def create_app(
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         if engine is not None:
-            await asyncio.to_thread(upgrade_to_head, settings.database_url)
+            await asyncio.to_thread(upgrade_to_head, settings.database_url, settings.turso_auth_token)
 
         async def sweep_forever():
             while True:

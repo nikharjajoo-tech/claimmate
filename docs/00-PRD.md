@@ -313,6 +313,7 @@ SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · 
 | D5 | Each intake is one claimant session in v1; returning with a claim reference code is v2 | 2026-09-25 |
 | D6 | Prompt and model changes ship only after beating the current version on the 50-scenario eval | 2026-09-25 |
 | D7 | Storage: local SQLite in M6 (SQLAlchemy 2.0 async + Alembic; evidence photos as files). Hosted database: **Turso** (SQLite-compatible), pending an M7 compatibility test that runs the full test suite through its `turso_serverless` driver; fallback PostgreSQL | 2026-09-25 |
+| D7 result | Turso compatibility test (2026-09-26): **the service is compatible** (SQLAlchemy through an aiosqlite bridge, Alembic migrations, and claim saves all worked), but **the Python driver is not production-ready**: `turso_serverless` 0.1.0 opens a new HTTPS connection per statement (~0.45 s each, so a claim save takes seconds) and sets no request timeout (a stalled request hung the connection twice). The adapter stays in the code as experimental and opt-in. **Hosted database choice pending.** | 2026-09-26 |
 | D8 | Keep the two-call (split) pipeline. Eval run C: one call was ~0.4 s faster per claim but less accurate (27 vs 32 scenarios fully passed) and recorded an injected $50,000 amount; see [eval results](04-eval-results.md) | 2026-09-26 |
 
 ### Open

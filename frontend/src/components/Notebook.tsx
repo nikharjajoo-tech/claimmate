@@ -20,7 +20,7 @@ export function Notebook({ claim, tools }: { claim: ClaimView | null; tools: Too
         <div>
           <h2>Claim notebook</h2>
           <p className="muted">
-            {title(claim.claim_type)}
+            {claim.claim_type ? title(claim.claim_type) : "Details appear here as you talk"}
             {claim.severity && ` · ${claim.severity} severity`}
             {claim.processing && " · updating…"}
           </p>

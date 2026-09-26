@@ -16,7 +16,8 @@ from app.config import get_settings
 from app.live.relay import LiveRelay
 from app.services.sessions import ClaimService
 from app.services.store import SessionStore
-from app.storage.db import create_all, make_engine, make_sessionmaker
+from app.storage.db import make_sessionmaker
+from tests.dbutil import fresh_schema, make_test_engine
 from app.storage.repository import ClaimRepository
 from tests.fakes import INJURY_FACTS, FakeLLM, fake_runner
 from tests.test_live_relay import FakeBrowser, FakeLive, eventually
@@ -25,10 +26,11 @@ PASSCODE = "correct horse battery"
 TODAY = lambda: date(2026, 9, 24)  # noqa: E731
 
 
-def build_app(tmp_path, *, passcode=PASSCODE, llm=None, secret="s3cret"):
+def build_app(tmp_path, *, passcode=PASSCODE, llm=None, secret="s3cret", reuse_db=False):
     settings = replace(get_settings(), google_api_key="test", adjuster_passcode=passcode, session_secret=secret)
-    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'claims.db'}")
-    asyncio.run(create_all(engine))
+    engine = make_test_engine(tmp_path, "claims.db")
+    if not reuse_db:
+        asyncio.run(fresh_schema(engine))
     store = SessionStore(ClaimRepository(make_sessionmaker(engine), tmp_path / "evidence"))
     return create_app(settings=settings, store=store, service=ClaimService(fake_runner(llm), today=TODAY), live_connect=None)
 
@@ -150,7 +152,7 @@ def test_full_review_workflow(app):
 
 def test_emergencies_lead_the_queue_even_mid_intake(tmp_path):
     app = build_app(tmp_path, llm=FakeLLM(facts=INJURY_FACTS))
-    routine = claimant_files_claim(build_app(tmp_path))  # same database file, routine claim first
+    routine = claimant_files_claim(build_app(tmp_path, reuse_db=True))  # same database, routine claim first
     with TestClient(app) as claimant:
         urgent = claimant.post("/api/claims").json()["id"]
         claimant.post(f"/api/claims/{urgent}/messages", json={"text": "I slipped and hurt my back"})
@@ -162,7 +164,7 @@ def test_emergencies_lead_the_queue_even_mid_intake(tmp_path):
 
 def test_claims_survive_a_server_restart(tmp_path):
     claim_id = claimant_files_claim(build_app(tmp_path))
-    restarted = build_app(tmp_path)  # new process: empty memory, same database
+    restarted = build_app(tmp_path, reuse_db=True)  # new process: empty memory, same database
     with signed_in(restarted) as adjuster:
         detail = adjuster.get(f"/api/adjuster/claims/{claim_id}").json()
         assert detail["state"]["status"] == "submitted"

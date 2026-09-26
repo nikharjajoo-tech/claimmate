@@ -115,6 +115,7 @@ class LiveRelay:
         self.max_seconds = max_seconds
         self._send_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
+        self._saves: set[asyncio.Task] = set()  # background saves: finished, never cancelled, at call end
         self._tool_tasks: dict[str, asyncio.Task] = {}
         self._update_task: asyncio.Task | None = None
         self._pending = {"claimant": self._new_pending(), "agent": self._new_pending()}
@@ -133,12 +134,19 @@ class LiveRelay:
             await self.browser.send_json(payload)
 
     async def persist(self) -> None:
-        """Write progress to the database. A storage failure must never drop the live call."""
+        """Save progress in the background. With a remote database (Turso) a save is several network
+        round trips; awaiting it here would stall audio forwarding. The repository's per-claim lock
+        keeps saves in order, and the final save at call end is awaited."""
         if self.store is None:
             return
+        task = self._spawn(self._save_quietly())
+        self._saves.add(task)
+        task.add_done_callback(self._saves.discard)
+
+    async def _save_quietly(self) -> None:
         try:
             await self.store.save(self.session)
-        except Exception:
+        except Exception:  # a storage failure must never drop the live call
             logger.exception("could not save claim %s", self.session.id)
 
     def _mark_turn_end(self, kind: str) -> None:
@@ -474,9 +482,9 @@ class LiveRelay:
                 for task in done:
                     task.result()  # surface errors from whichever loop ended
         finally:
-            for task in list(self._tasks):
+            for task in list(self._tasks - self._saves):
                 task.cancel()
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+            await asyncio.gather(*self._tasks, return_exceptions=True)  # in-flight saves complete
             for activity in self.session.tool_activity:
                 if activity.phase == "running":
                     activity.phase, activity.headline = "cancelled", "Call ended"

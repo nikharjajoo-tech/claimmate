@@ -6,9 +6,12 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.storage.models import Base
+from app.storage.turso import is_turso_url, make_turso_engine
 
 
-def make_engine(url: str) -> AsyncEngine:
+def make_engine(url: str, *, turso_auth_token: str = "") -> AsyncEngine:
+    if is_turso_url(url):
+        return make_turso_engine(url, turso_auth_token)
     engine = create_async_engine(url)
     if url.startswith("sqlite"):
 
