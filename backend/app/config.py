@@ -33,6 +33,7 @@ class Settings:
     llm_attempts_per_model: int
     llm_timeout_s: float
     llm_cooldown_s: float
+    llm_max_rate_limit_wait_s: float  # live calls should not wait long; batch evals can
 
     @property
     def model_chain(self) -> list[str]:
@@ -74,4 +75,5 @@ def get_settings() -> Settings:
         llm_attempts_per_model=int(os.getenv("CLAIMVOICE_LLM_ATTEMPTS_PER_MODEL", "2")),
         llm_timeout_s=float(os.getenv("CLAIMVOICE_LLM_TIMEOUT_S", "25")),
         llm_cooldown_s=float(os.getenv("CLAIMVOICE_LLM_COOLDOWN_S", "60")),
+        llm_max_rate_limit_wait_s=float(os.getenv("CLAIMVOICE_LLM_MAX_RATE_LIMIT_WAIT_S", "10")),
     )

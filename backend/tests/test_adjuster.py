@@ -210,3 +210,63 @@ async def test_end_call_submits_but_a_dropped_connection_does_not():
     await run_call(store, dropped, lose_connection)
     assert dropped.status == "intake"  # the claimant can reconnect and continue
     assert (await store.get(dropped.id, "alice")) is dropped
+
+
+# --- observability -------------------------------------------------------------
+
+
+async def test_voice_latency_is_measured_once_per_reply():
+    from google.genai import types
+
+    store = SessionStore()
+    session = await store.create("alice")
+    browser, live = FakeBrowser(), FakeLive()
+
+    @contextlib.asynccontextmanager
+    async def connect():
+        yield live
+
+    relay = LiveRelay(session, ClaimService(fake_runner(), today=TODAY), browser, connect, store=store)
+    task = asyncio.create_task(relay.run())
+    await eventually(lambda: browser.of_type("ready"))
+    audio = types.Content(parts=[types.Part(inline_data=types.Blob(data=b"\x00\x01", mime_type="audio/pcm"))])
+
+    live.emit(input_transcription=types.Transcription(text="My basement flooded.", finished=True))
+    await eventually(lambda: len(session.turns) == 2)
+    live.emit(model_turn=audio)
+    live.emit(model_turn=audio)  # later chunks of the same reply are not new samples
+    await eventually(lambda: len(browser.of_type("audio")) == 2)
+    assert len(relay.latencies_ms) == 1
+
+    browser.push(type="text", text="Nobody was hurt")  # typed turns are timed too
+    await eventually(lambda: len(session.turns) == 3)
+    live.emit(model_turn=audio)
+    await eventually(lambda: len(relay.latencies_ms) == 2)
+
+    live.emit(model_turn=audio)  # audio with no new claimant turn: nothing to measure
+    await eventually(lambda: len(browser.of_type("audio")) == 4)
+    assert len(relay.latencies_ms) == 2
+    browser.push(type="close")
+    await asyncio.wait_for(task, 2)
+
+
+def test_operations_metrics(tmp_path):
+    app = build_app(tmp_path)
+    claim_id = claimant_files_claim(app)
+    with signed_in(app) as adjuster:
+        metrics = adjuster.get("/api/adjuster/metrics").json()
+        assert metrics["claims"] == {"total": 1, "by_status": {"submitted": 1}, "by_route": {"needs_docs": 1}}
+        assert metrics["pipeline"]["runs"] == 1 and metrics["pipeline"]["runs_by_model"] == {"fake": 1}
+        assert metrics["voice"]["turns"] == 0 and metrics["voice"]["first_audio_p50_ms"] is None  # no data, not zero
+
+        store = app.state.store
+        for ms in (900, 1200, 1400, 2600):
+            asyncio.run(store.repo.record_voice_latency(claim_id, ms, "spoken"))
+        voice = adjuster.get("/api/adjuster/metrics").json()["voice"]
+        assert (voice["turns"], voice["first_audio_p50_ms"], voice["first_audio_p95_ms"]) == (4, 1200, 2600)
+
+        adjuster.post(f"/api/adjuster/claims/{claim_id}/open")
+        adjuster.post(f"/api/adjuster/claims/{claim_id}/override", json={"route": "policy_review", "reason": "Check endorsement dates."})
+        assert adjuster.get("/api/adjuster/metrics").json()["review"] == {"reviewed": 1, "overridden": 1}
+    with TestClient(app) as anonymous:
+        assert anonymous.get("/api/adjuster/metrics").status_code == 401

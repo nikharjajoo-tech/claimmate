@@ -23,7 +23,6 @@ T = TypeVar("T", bound=BaseModel)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 RETRYABLE_CODES = {500, 502, 503, 504}
 SKIP_MODEL_CODES = {400, 404}  # model not served, or model rejects this schema
-MAX_RATE_LIMIT_WAIT_S = 10.0  # per-minute limits: wait briefly; longer means a daily limit, skip the model
 
 # Schema keywords strict mode does not accept; validation still happens client-side with Pydantic.
 _UNSUPPORTED_KEYWORDS = {"default", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "format"}
@@ -135,7 +134,8 @@ class GroqLLM:
                         last_error = f"HTTP {code}: {response.text[:300]}"
                         if code == 429:
                             wait = float(response.headers.get("retry-after", "60") or 60)
-                            if wait <= MAX_RATE_LIMIT_WAIT_S:
+                            # Short waits are per-minute limits worth sitting out; long ones are daily limits.
+                            if wait <= self.settings.llm_max_rate_limit_wait_s:
                                 logger.warning("%s: rate limited on %s, waiting %.1fs", step, model, wait)
                                 await self._sleep(wait)
                                 attempt -= 1  # a short rate-limit wait is not a failed attempt

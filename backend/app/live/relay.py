@@ -39,6 +39,7 @@ from google.genai import types
 
 from app.domain.policy_store import lookup_policy
 from app.live.tools import headline, scheduling, summarize_for_agent
+from app.observability import claim_id_var
 from app.llm.client import StructuredLLM
 from app.services.evidence import capture_summary, fresh_frame, is_jpeg, verify_and_record
 from app.services.sessions import ClaimService, ClaimSession, SessionError, ToolActivity
@@ -103,6 +104,9 @@ class LiveRelay:
         self.vision = vision
         self.store = store
         self.ended_by_claimant = False
+        # Voice latency: when the claimant's last turn ended, until the agent's first audio.
+        self._awaiting_reply: tuple[float, str] | None = None
+        self.latencies_ms: list[int] = []
         self.session = session
         self.service = service
         self.browser = browser
@@ -137,6 +141,23 @@ class LiveRelay:
         except Exception:
             logger.exception("could not save claim %s", self.session.id)
 
+    def _mark_turn_end(self, kind: str) -> None:
+        self._awaiting_reply = (time.monotonic(), kind)
+
+    async def _record_first_audio(self) -> None:
+        if self._awaiting_reply is None:
+            return
+        started, kind = self._awaiting_reply
+        self._awaiting_reply = None
+        latency_ms = int((time.monotonic() - started) * 1000)
+        self.latencies_ms.append(latency_ms)
+        logger.info("agent replied", extra={"event": "voice_latency", "duration_ms": latency_ms})
+        if self.store is not None and self.store.repo is not None:
+            try:
+                await self.store.repo.record_voice_latency(self.session.id, latency_ms, kind)
+            except Exception:
+                logger.exception("could not record voice latency")
+
     async def send_state(self) -> None:
         await self.send({"type": "state", "state": session_view(self.session)})
 
@@ -163,6 +184,7 @@ class LiveRelay:
         await self.send({"type": "transcript", "speaker": speaker, "id": turn.id, "text": turn.text, "final": True})
         await self.persist()
         if speaker == "claimant":
+            self._mark_turn_end("spoken")
             self.request_update()
 
     def request_update(self) -> asyncio.Task:
@@ -364,6 +386,7 @@ class LiveRelay:
             await self.send({"type": "transcript", "speaker": "claimant", "id": turn.id, "text": turn.text, "final": True})
             self.request_update()
             await live.send_client_content(turns=types.Content(role="user", parts=[types.Part(text=turn.text)]), turn_complete=True)
+            self._mark_turn_end("typed")
         return True
 
     async def client_loop(self, live: LiveSession) -> None:
@@ -410,6 +433,7 @@ class LiveRelay:
             await self.finalize("claimant")
             for part in content.model_turn.parts or []:
                 if part.inline_data and isinstance(part.inline_data.data, bytes):
+                    await self._record_first_audio()
                     await self.send({"type": "audio", "data": base64.b64encode(part.inline_data.data).decode("ascii")})
         if content.interrupted:
             await self.finalize("agent")
@@ -426,6 +450,7 @@ class LiveRelay:
     # --- lifecycle -----------------------------------------------------------
 
     async def run(self) -> None:
+        claim_id_var.set(self.session.id)  # every log line from this call carries the claim id
         self.session.live_connected = True
         try:
             async with self.connect() as live:

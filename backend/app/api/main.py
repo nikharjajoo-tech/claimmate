@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
+from app.observability import configure_logging
 from app.live.relay import LiveRelay, LiveSession
 from app.live.tools import TOOL_NAMES, build_live_config
 from app.llm.client import StructuredLLM
@@ -30,6 +31,7 @@ from app.llm.factory import make_pipeline_llm, make_vision_llm
 from app.pipeline.graph import build_graph, run_pipeline
 from app.services.evidence import capture_summary, verify_and_record
 from app.api.adjuster import adjuster_router
+from app.api.security import RateLimiter, SecurityMiddleware
 from app.services.packet_zip import build_packet_zip
 from app.services.sessions import ClaimService, SessionError
 from app.services.store import SessionStore
@@ -116,6 +118,8 @@ def create_app(
                 await engine.dispose()
 
     app = FastAPI(title="ClaimVoice API", lifespan=lifespan)
+    app.add_middleware(SecurityMiddleware)
+    create_limiter = RateLimiter(limit=10, window_s=60)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -152,6 +156,8 @@ def create_app(
 
     @app.post("/api/claims", status_code=201)
     async def create_claim(request: Request, response: Response) -> dict[str, Any]:
+        if not create_limiter.allow(request.client.host if request.client else "unknown"):
+            raise HTTPException(429, "Too many new claims from this device. Wait a minute and try again.")
         owner = owner_of(request) or secrets.token_urlsafe(32)
         session = await store.create(owner)
         response.set_cookie(
@@ -279,4 +285,5 @@ def create_app(
     return app
 
 
+configure_logging(os.getenv("CLAIMVOICE_LOG_LEVEL", "INFO"))
 app = create_app()

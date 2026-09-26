@@ -8,6 +8,7 @@ the session with what was last written, so callers can't forget to log them.
 from __future__ import annotations
 
 import asyncio
+import math
 import shutil
 import time
 from datetime import UTC, datetime
@@ -21,7 +22,7 @@ from app.domain.models import EvidenceCapture, Route, is_blank
 from app.pipeline.graph import PipelineResult
 from app.pipeline.prompts import Turn
 from app.services.sessions import ClaimSession
-from app.storage.models import AuditRow, ClaimRow, EvidenceRow, FindingRow, PipelineRunRow, TurnRow
+from app.storage.models import AuditRow, ClaimRow, EvidenceRow, FindingRow, PipelineRunRow, TurnRow, VoiceLatencyRow
 
 ROUTE_ORDER = {route.value: i for i, route in enumerate(Route)}
 ACTOR_FOR_SOURCE = {"agent": "agent", "claimant": "claimant", "upload": "claimant"}
@@ -120,11 +121,15 @@ class ClaimRepository:
 
     async def delete(self, claim_id: str) -> None:
         async with self._sessionmaker() as db, db.begin():
-            for table in (AuditRow, PipelineRunRow, FindingRow, EvidenceRow, TurnRow):
+            for table in (AuditRow, PipelineRunRow, FindingRow, EvidenceRow, TurnRow, VoiceLatencyRow):
                 await db.execute(delete(table).where(table.claim_id == claim_id))
             await db.execute(delete(ClaimRow).where(ClaimRow.id == claim_id))
         await asyncio.to_thread(shutil.rmtree, self.evidence_dir / claim_id, True)
         self._locks.pop(claim_id, None)
+
+    async def record_voice_latency(self, claim_id: str, first_audio_ms: int, turn_kind: str) -> None:
+        async with self._sessionmaker() as db, db.begin():
+            db.add(VoiceLatencyRow(claim_id=claim_id, first_audio_ms=first_audio_ms, turn_kind=turn_kind))
 
     # --- read ----------------------------------------------------------------
 
@@ -200,6 +205,62 @@ class ClaimRepository:
             )).all()
         return [{"at": _aware(r.created_at).isoformat(timespec="seconds"), "actor": r.actor,
                  "action": r.action, "detail": r.detail} for r in rows]
+
+
+async def _column(db, column) -> list:
+    return list((await db.scalars(select(column))).all())
+
+
+def percentile(values: list[int], q: float) -> int | None:
+    """Nearest-rank percentile; None when there is no data (never a misleading zero)."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = max(1, math.ceil(q / 100 * len(ordered)))  # nearest rank: the smallest value covering q%
+    return ordered[min(rank, len(ordered)) - 1]
+
+
+async def operations_metrics(repo: ClaimRepository) -> dict[str, Any]:
+    """Live service metrics from stored data (PRD section 8)."""
+    async with repo._sessionmaker() as db:
+        claims = (await db.execute(select(ClaimRow.status, ClaimRow.pipeline_route, ClaimRow.frozen_route,
+                                          ClaimRow.route_override))).all()
+        runs = (await db.execute(select(PipelineRunRow.latency_ms, PipelineRunRow.tokens_in,
+                                        PipelineRunRow.tokens_out, PipelineRunRow.models))).all()
+        voice = await _column(db, VoiceLatencyRow.first_audio_ms)
+    by_status: dict[str, int] = {}
+    by_route: dict[str, int] = {}
+    for status, pipeline_route, frozen, override in claims:
+        by_status[status] = by_status.get(status, 0) + 1
+        route = override or frozen or pipeline_route or "none"
+        by_route[route] = by_route.get(route, 0) + 1
+    latencies = [r.latency_ms for r in runs]
+    models: dict[str, int] = {}
+    for r in runs:
+        for m in r.models or []:
+            models[m] = models.get(m, 0) + 1
+    reviewed = sum(1 for c in claims if c.frozen_route or c.route_override)
+    return {
+        "claims": {"total": len(claims), "by_status": by_status, "by_route": by_route},
+        "pipeline": {
+            "runs": len(runs),
+            "latency_p50_ms": percentile(latencies, 50),
+            "latency_p95_ms": percentile(latencies, 95),
+            "tokens_in": sum(r.tokens_in for r in runs),
+            "tokens_out": sum(r.tokens_out for r in runs),
+            "runs_by_model": models,
+        },
+        "voice": {
+            "turns": len(voice),
+            "first_audio_p50_ms": percentile(voice, 50),
+            "first_audio_p95_ms": percentile(voice, 95),
+            "target_p50_ms": 1500,
+        },
+        "review": {
+            "reviewed": reviewed,
+            "overridden": sum(1 for c in claims if c.route_override),
+        },
+    }
 
 
 def _event(actor: str, action: str, detail: str) -> tuple[str, str, str]:

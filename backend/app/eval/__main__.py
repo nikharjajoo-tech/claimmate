@@ -75,7 +75,8 @@ def main() -> int:
         results_path.write_text("".join(r.model_dump_json() + "\n" for r in previous.values()))
     todo = [s for s in scenarios if s.id not in previous]
 
-    settings = get_settings()
+    # A batch run can sit out per-minute rate limits that a live call could not afford to wait for.
+    settings = replace(get_settings(), llm_max_rate_limit_wait_s=30.0)
     if args.provider:
         settings = replace(settings, pipeline_provider=args.provider)
     if args.pipeline:

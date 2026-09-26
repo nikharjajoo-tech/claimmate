@@ -17,6 +17,7 @@ from app.services import lifecycle
 from app.services.packet_zip import build_packet_zip
 from app.services.store import SessionStore
 from app.services.view import session_view
+from app.storage.repository import operations_metrics
 
 ADJUSTER_COOKIE = "claimvoice_adjuster"
 SESSION_HOURS = 8
@@ -99,6 +100,11 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
     @router.post("/logout", status_code=204)
     def logout(response: Response) -> None:
         response.delete_cookie(ADJUSTER_COOKIE, path="/api/adjuster")
+
+    @router.get("/metrics", dependencies=[Depends(require_adjuster)])
+    async def metrics() -> dict[str, Any]:
+        """Live operations metrics (PRD section 8) computed from stored claims and runs."""
+        return await operations_metrics(store.repo)
 
     @router.get("/claims", dependencies=[Depends(require_adjuster)])
     async def queue(status: str = "open", route: str | None = None, type: str | None = None) -> dict[str, Any]:

@@ -103,3 +103,19 @@ class PipelineRunRow(Base):
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
     models: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class VoiceLatencyRow(Base):
+    """Time from the end of a claimant turn to the agent's first audio (PRD target: p50 < 1.5 s).
+
+    Measured on the server: from the finalized claimant transcript to the first audio chunk from the
+    voice model, so it excludes the browser's network hop.
+    """
+
+    __tablename__ = "voice_latency"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    claim_id: Mapped[str] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    first_audio_ms: Mapped[int] = mapped_column(Integer)
+    turn_kind: Mapped[str] = mapped_column(String(8))  # spoken | typed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

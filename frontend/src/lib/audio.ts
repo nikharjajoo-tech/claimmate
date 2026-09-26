@@ -93,17 +93,6 @@ export class AudioPlayer {
   }
 }
 
-const WORKLET = `
-class PcmCapture extends AudioWorkletProcessor {
-  process(inputs) {
-    const channel = inputs[0] && inputs[0][0];
-    if (channel) this.port.postMessage(channel.slice(0));
-    return true;
-  }
-}
-registerProcessor("pcm-capture", PcmCapture);
-`;
-
 /** Streams the microphone as base64 PCM16 @ 16 kHz, ~100 ms per chunk. */
 export class MicCapture {
   private stream: MediaStream | null = null;
@@ -117,12 +106,7 @@ export class MicCapture {
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
     });
     this.ctx = new AudioContext();
-    const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
-    try {
-      await this.ctx.audioWorklet.addModule(url);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    await this.ctx.audioWorklet.addModule("/pcm-capture.js"); // static file, allowed by script-src 'self'
     const source = this.ctx.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.ctx, "pcm-capture");
     const rate = this.ctx.sampleRate;
