@@ -6,6 +6,20 @@ export interface ClaimDetail {
   audit: AuditEntry[];
 }
 
+export interface OperationsMetrics {
+  claims: { total: number; by_status: Record<string, number>; by_route: Record<string, number> };
+  pipeline: {
+    runs: number;
+    latency_p50_ms: number | null;
+    latency_p95_ms: number | null;
+    tokens_in: number;
+    tokens_out: number;
+    runs_by_model: Record<string, number>;
+  };
+  voice: { turns: number; first_audio_p50_ms: number | null; first_audio_p95_ms: number | null; target_p50_ms: number };
+  review: { reviewed: number; overridden: number };
+}
+
 export class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -54,6 +68,7 @@ export const adjusterApi = {
   setStatus: (id: string, status: ClaimStatus, note: string) => post<ClaimDetail>(`/claims/${id}/status`, { status, note }),
   override: (id: string, route: Route, reason: string) => post<ClaimDetail>(`/claims/${id}/override`, { route, reason }),
   packetUrl: (id: string) => `/api/adjuster/claims/${id}/packet.zip`,
+  metrics: () => call<OperationsMetrics>("/metrics"),
 };
 
 /** "4 min ago", "3 h ago", "2 d ago" for queue ages. */
@@ -63,4 +78,10 @@ export function age(iso: string, now: number = Date.now()): string {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
   return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+}
+
+/** "1.2 s" / "840 ms"; "No data" when nothing was measured (never a misleading zero). */
+export function formatMs(ms: number | null): string {
+  if (ms === null) return "No data";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
 }

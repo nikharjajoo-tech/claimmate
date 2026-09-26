@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { adjusterApi, HttpError } from "../lib/adjuster";
 import { ClaimDetailView } from "./ClaimDetailView";
+import { OperationsPanel } from "./OperationsPanel";
 import { QueueView } from "./QueueView";
 
 type Auth = "checking" | "disabled" | "signed_out" | "signed_in";
@@ -9,6 +10,7 @@ export default function AdjusterApp() {
   const [auth, setAuth] = useState<Auth>("checking");
   const [selected, setSelected] = useState<string | null>(null);
   const [queueVersion, setQueueVersion] = useState(0);
+  const [tab, setTab] = useState<"claims" | "operations">("claims");
 
   const check = useCallback(async () => {
     try {
@@ -43,6 +45,11 @@ export default function AdjusterApp() {
             Claimant view
           </a>
           {auth === "signed_in" && (
+            <button className="btn" onClick={() => setTab(tab === "claims" ? "operations" : "claims")}>
+              {tab === "claims" ? "Operations" : "Claims"}
+            </button>
+          )}
+          {auth === "signed_in" && (
             <button
               className="btn"
               onClick={async () => {
@@ -68,7 +75,8 @@ export default function AdjusterApp() {
         </section>
       )}
       {auth === "signed_out" && <SignIn onSignedIn={() => setAuth("signed_in")} />}
-      {auth === "signed_in" && (
+      {auth === "signed_in" && tab === "operations" && <OperationsPanel onUnauthorized={onUnauthorized} />}
+      {auth === "signed_in" && tab === "claims" && (
         <main className="layout review">
           <QueueView
             selected={selected}
