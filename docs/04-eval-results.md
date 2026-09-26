@@ -13,8 +13,8 @@ How to reproduce any row: `python -m app.eval --provider groq --models <model> -
 | A | 2026-09-25 | groq gpt-oss-120b | split (2 calls) | v1 | **96.8%** | **96.0%** | **100%** (7/7) | **0** | 32/50 | 2.9 s | 103.5K / 37.9K |
 | B | 2026-09-25 | groq gpt-oss-20b | split | v1 | 97.9% | 89.6% ❌ | 100% (7/7) | **4** ❌ | 33/50 (2 errors) | 2.1 s | 101.6K / 30.0K |
 | C | 2026-09-26 | groq gpt-oss-120b | single (1 call) | v1 | 96.4% | 94.0% | 100% (7/7) | 0 | 27/50 | 2.5 s* | 90.8K / 37.0K |
-| E | planned | gpt-oss-20b | split | v2 | | | | | | | |
-| D | planned | best of A/C | best | v2 | | | | | | | |
+| E | 2026-09-26 | groq gpt-oss-20b | split | **v2** | **98.2%** | 96.0% | 100% (7/7) | 1 ❌ | **39/50** | 2.0 s | 133.5K / 28.2K |
+| D | planned | gpt-oss-120b | split (per D8) | v2 | | | | | | | |
 
 All four PRD targets (F1 ≥ 90%, routing ≥ 90%, safety recall 100%, zero false escalations) were
 met by the first baseline.
@@ -79,6 +79,30 @@ Compared with run A (same model, same prompt, only the pipeline mode changed):
 - **Decision: keep split mode as the default.** 0.4 s is not worth lower accuracy and an injected
   dollar amount reaching the claim record. The single mode stays available (`--pipeline single`) for
   re-testing with future prompts or models.
+
+## Run E: prompt v2 on the smaller model (gpt-oss-20b)
+
+Compared with run B (same model, same pipeline, only the prompt changed):
+
+| | B: v1 | E: v2 |
+|---|---|---|
+| Field F1 | 97.9% | **98.2%** |
+| Routing accuracy | 89.6% ❌ | **96.0%** ✅ |
+| False safety escalations | 4 ❌ | **1** ❌ |
+| Evidence status accuracy | 82.7% | **91.1%** |
+| Fully passed | 33/50 | **39/50** |
+| Strict-schema errors | 2 | **0** |
+
+- **v2 fixed 5 routing errors and broke none.** The safety definitions removed three of the four
+  false escalations; the document glossary lifted evidence accuracy by 8 points; the narrower output
+  schema ended the strict-mode failures.
+- **What v2 did not fix on this model:** hp-08 still escalated with
+  `unsafe_housing=present: "Staying away from the garage"`, almost the exact example v2 lists as *not* a
+  safety fact; and co-04 still ignored the spelled-out name ("H A D D A D"). Both are instructions the
+  prompt states explicitly, which points to a model limit rather than a prompt gap.
+- **Decision:** 20b + v2 is the fastest setup that meets 3 of 4 targets (p50 2.0 s), but one false
+  escalation fails the safety bar, so gpt-oss-120b stays the production model. Run D tests v2 on 120b;
+  v2 becomes the default only if D meets every target and beats run A.
 
 ## Known scenario issues (scenario set frozen; to fix in a future set version)
 
