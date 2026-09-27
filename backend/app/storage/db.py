@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ssl
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import certifi
 from sqlalchemy import event
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
@@ -22,7 +24,14 @@ def normalize_postgres_url(url: str) -> tuple[str, dict]:
     sslmode = query.pop("sslmode", None)
     query.pop("channel_binding", None)  # libpq-only option (Neon adds it); asyncpg negotiates itself
     if sslmode in {"require", "verify-ca", "verify-full"}:
-        connect_args["ssl"] = True
+        # Verified TLS with certifi's CA bundle: some Python installs (python.org on macOS) have no
+        # system roots, and a plain ssl=True would then fail to verify the server.
+        connect_args["ssl"] = ssl.create_default_context(cafile=certifi.where())
+    if "-pooler" in (parts.hostname or ""):
+        # Neon's pooled endpoint is PgBouncer in transaction mode, where prepared statements don't
+        # survive between transactions: turn off asyncpg's and SQLAlchemy's statement caches.
+        connect_args["statement_cache_size"] = 0
+        query["prepared_statement_cache_size"] = "0"
     return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)), connect_args
 
 
