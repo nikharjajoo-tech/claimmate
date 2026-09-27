@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-timeout>=2.3"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -36,3 +36,6 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# A hung test fails with every thread's stack instead of stalling CI silently.
+timeout = 120
+timeout_method = "thread"

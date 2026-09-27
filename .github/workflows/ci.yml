@@ -7,6 +7,7 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -19,11 +20,12 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - run: pip install -e ".[dev]"
       # Every test uses fakes; no API keys or network calls are needed.
-      - run: pytest -q
+      - run: pytest -q -v --durations=10
 
   # The database tests again, on a real PostgreSQL server (hosted database: Neon, PRD D9).
   postgres:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17
@@ -52,6 +54,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -68,6 +71,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [backend, postgres, frontend]
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +93,7 @@ jobs:
   # repository secret that can trigger deploys of this one service and nothing else.
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [backend, postgres, frontend, docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency: deploy-production
