@@ -15,6 +15,8 @@ How to reproduce any row: `python -m app.eval --provider groq --models <model> -
 | C | 2026-09-26 | groq gpt-oss-120b | single (1 call) | v1 | 96.4% | 94.0% | 100% (7/7) | 0 | 27/50 | 2.5 s* | 90.8K / 37.0K |
 | E | 2026-09-26 | groq gpt-oss-20b | split | **v2** | **98.2%** | 96.0% | 100% (7/7) | 1 ❌ | **39/50** | 2.0 s | 133.5K / 28.2K |
 | D | 2026-09-27 | groq gpt-oss-120b | split | v2 | **98.7%** | 94.0% | 100% (7/7) | 0 | **42/50** | 3.4 s | 132.8K / 39.7K |
+| F | 2026-09-27 | groq gpt-oss-20b | split | **v3** | **99.3%** | 96.0% | 100% (7/7) | 1 ❌ | 42/50 | 2.0 s | 132.6K / 29.4K |
+| G | planned | gpt-oss-120b | split | v3 | | | | | | | |
 
 All four PRD targets (F1 ≥ 90%, routing ≥ 90%, safety recall 100%, zero false escalations) were
 met by the first baseline.
@@ -130,6 +132,24 @@ Compared with run A (same model and pipeline, only the prompt changed):
 - **Next (prompt v3):** stop asking the model to do calendar arithmetic. The model extracts the date
   as said ("Sunday the 20th"); deterministic code resolves it against the reference date. This applies
   the project's rule (AI perceives, code decides) to dates.
+
+## Run F: prompt v3 (dates resolved by code) on gpt-oss-20b
+
+v3 changes only the date rules: the model copies the claimant's words ("Sunday the 20th") and
+`app/pipeline/dates.py` resolves them, returning blank for vague, future, or contradictory dates.
+
+| | E: v2 (same model) | F: v3 |
+|---|---|---|
+| date_of_loss accuracy | 91.8% | **100%** |
+| Field F1 | 98.2% | **99.3%** |
+| Missed + wrong + hallucinated fields | 3 + 3 + 0 | **0 + 2 + 0** |
+| Fully passed | 39/50 | **42/50** |
+| Routing accuracy | 96.0% | 96.0% |
+| False safety escalations | 1 | 1 (the same hp-08) |
+
+- Every date was right, including the weekday-plus-day cases that went wrong in run D.
+- The remaining false escalation is the smaller model's hp-08 limit, unchanged by the prompt.
+- **Next:** run G (v3 on gpt-oss-120b). v3 becomes the default if G meets every target and beats A.
 
 ## Known scenario issues (scenario set frozen; to fix in a future set version)
 

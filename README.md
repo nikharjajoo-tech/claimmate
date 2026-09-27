@@ -1,5 +1,8 @@
 # ClaimVoice
 
+**Live demo: https://claimvoice-v2rh.onrender.com** (free tier: the first visit after 15 idle minutes
+takes about a minute to wake up). All policies and people in the demo are fictional.
+
 A real-time voice AI agent for insurance claim intake. A claimant reports a loss by **talking**; while
 the conversation continues, a background pipeline extracts structured facts, verifies the policy,
 applies auditable business rules, and routes the claim for a human adjuster.

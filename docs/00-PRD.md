@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Owner** | Nikhar |
-| **Status** | In development (M1–M6 complete) |
+| **Status** | Live demo; M1–M6 complete, M7 nearly done |
 | **Last updated** | 2026-09-25 |
 | **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) · [User workflows](05-user-workflows.md) · [Eval results](04-eval-results.md) |
 
@@ -288,7 +288,7 @@ SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · 
 | M4 | Live voice | WebSocket relay to Gemini Live, 3 non-blocking tools, revision-cached sessions, typed mode, Groq pipeline provider, React call page; 215 backend + 15 frontend tests; verified end to end against real Gemini Live (first audio 1.5–2.1 s) | ✅ Done |
 | M5 | Camera evidence | Live camera frames to the agent, `capture_evidence` tool, manual capture and photo upload, independent vision verification (Groq qwen3.8-27b → Gemini fallback), evidence gallery and packet section | ✅ Done |
 | M6 | Persistence + adjuster dashboard | SQLite via SQLAlchemy 2.0 async + Alembic (migrations applied at startup, drift-tested); incremental saves with derived audit events; claim lifecycle with route freeze; passcode sign-in (signed 8-hour cookie, rate-limited); queue, claim detail with fact-to-transcript highlighting, status actions, override; packet ZIP with photos. Verified on the live stack, including a server restart. 260 backend + 23 frontend tests | ✅ Done |
-| M7 | Hardening + ship | Security, observability, Docker, CI, Turso check, README + demo video | 🔄 In progress: masked JSON logs, voice latency tracking, operations metrics, security headers and limits, Docker + CI done |
+| M7 | Hardening + ship | Masked JSON logs, voice latency, operations panel, security headers and limits, Docker + CI (SQLite and PostgreSQL), Turso test (D7), Neon PostgreSQL (D9), **live on Render free tier: https://claimvoice-v2rh.onrender.com** (verified end to end: typed claim, adjuster review on Neon, live voice via Gemini). Remaining: demo video | 🔄 Nearly done |
 
 ## 14. Risks and mitigations
 
