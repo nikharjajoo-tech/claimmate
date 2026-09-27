@@ -26,6 +26,7 @@ class Settings:
     database_url: str
     turso_auth_token: str
     evidence_dir: Path
+    evidence_in_database: bool
     adjuster_passcode: str  # empty disables the adjuster API
     session_secret: str  # signs adjuster sessions; random per process if unset
     extract_model: str
@@ -67,6 +68,8 @@ def get_settings() -> Settings:
         database_url=os.getenv("CLAIMVOICE_DATABASE_URL", "").strip() or f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}",
         turso_auth_token=os.getenv("TURSO_AUTH_TOKEN", "").strip(),
         evidence_dir=Path(os.getenv("CLAIMVOICE_EVIDENCE_DIR", "").strip() or str(DATA_DIR / "evidence")),
+        # "database" for hosts whose disk is wiped on restart (Render free tier); default: files on disk
+        evidence_in_database=os.getenv("CLAIMVOICE_EVIDENCE_STORAGE", "disk").strip().lower() == "database",
         adjuster_passcode=os.getenv("CLAIMVOICE_ADJUSTER_PASSCODE", "").strip(),
         session_secret=os.getenv("CLAIMVOICE_SESSION_SECRET", "").strip() or secrets.token_hex(32),
         extract_model=os.getenv("CLAIMVOICE_EXTRACT_MODEL", "gemini-3.8-flash"),

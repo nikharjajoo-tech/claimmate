@@ -92,10 +92,14 @@ def create_app(
     engine = None
     if store is None:  # production wiring: SQLite (or any SQLAlchemy URL) plus evidence files on disk
         engine = make_engine(settings.database_url, turso_auth_token=settings.turso_auth_token)
-        store = SessionStore(ClaimRepository(make_sessionmaker(engine), settings.evidence_dir))
+        store = SessionStore(ClaimRepository(
+            make_sessionmaker(engine), settings.evidence_dir, images_in_database=settings.evidence_in_database
+        ))
     service = service or ClaimService(lazy_pipeline_runner(settings))
     live_connect = live_connect or gemini_connect_factory(settings)
     allowed_origins = [o.strip() for o in os.getenv("CLAIMVOICE_ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",") if o.strip()]
+    if os.getenv("RENDER_EXTERNAL_URL"):  # set by Render to the service's public https URL
+        allowed_origins.append(os.environ["RENDER_EXTERNAL_URL"].rstrip("/"))
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):

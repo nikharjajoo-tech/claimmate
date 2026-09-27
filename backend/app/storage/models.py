@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -58,7 +58,8 @@ class EvidenceRow(Base):
 
     capture_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     claim_id: Mapped[str] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
-    file_path: Mapped[str] = mapped_column(String(500))
+    file_path: Mapped[str] = mapped_column(String(500))  # empty when the image is stored in the database
+    image: Mapped[bytes | None] = mapped_column(LargeBinary)  # used on hosts without a persistent disk
     caption: Mapped[str] = mapped_column(Text, default="")
     claimant_claim: Mapped[str] = mapped_column(Text, default="")
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)

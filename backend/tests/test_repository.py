@@ -201,3 +201,17 @@ def test_lifecycle_rejects_invalid_transitions():
     with pytest.raises(SessionError):
         lifecycle.transition(s, "in_review", actor="adjuster")
     assert "awaiting_docs: Need the invoice" in s.pending_audit[-4].detail
+
+
+async def test_images_can_live_in_the_database_for_hosts_without_a_disk(tmp_path):
+    engine = make_test_engine(tmp_path, "db-images.db")
+    await fresh_schema(engine)
+    repo = ClaimRepository(make_sessionmaker(engine), tmp_path / "unused", images_in_database=True)
+    s = new_session("img1")
+    s.captures.append(EvidenceCapture(capture_id="cap1", caption="Wet floor.", source="upload"))
+    s.evidence_images["cap1"] = JPEG
+    await repo.save(s)
+    assert not (tmp_path / "unused").exists()  # nothing written to disk
+    loaded = await repo.load("img1")
+    assert loaded.evidence_images["cap1"] == JPEG
+    await engine.dispose()

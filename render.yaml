@@ -1,0 +1,23 @@
+# Render Blueprint: Dashboard > New > Blueprint > select this repo. Free web service + Neon Postgres.
+# Secrets marked sync: false are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: claimvoice
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: GOOGLE_API_KEY          # Gemini Live (voice)
+        sync: false
+      - key: GROQ_API_KEY            # claim pipeline and photo checks
+        sync: false
+      - key: CLAIMVOICE_DATABASE_URL # Neon connection string (postgresql://...?sslmode=require)
+        sync: false
+      - key: CLAIMVOICE_ADJUSTER_PASSCODE
+        sync: false
+      - key: CLAIMVOICE_SESSION_SECRET
+        generateValue: true
+      - key: CLAIMVOICE_EVIDENCE_STORAGE  # Render's free disk is wiped on restart
+        value: database

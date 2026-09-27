@@ -29,9 +29,12 @@ ACTOR_FOR_SOURCE = {"agent": "agent", "claimant": "claimant", "upload": "claiman
 
 
 class ClaimRepository:
-    def __init__(self, sessionmaker: async_sessionmaker, evidence_dir: Path) -> None:
+    def __init__(self, sessionmaker: async_sessionmaker, evidence_dir: Path, *, images_in_database: bool = False) -> None:
+        """images_in_database: keep evidence photos in the database instead of files, for hosts whose
+        disk is wiped on restart (e.g. Render's free tier)."""
         self._sessionmaker = sessionmaker
         self.evidence_dir = evidence_dir
+        self.images_in_database = images_in_database
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, claim_id: str) -> asyncio.Lock:
@@ -55,9 +58,10 @@ class ClaimRepository:
         captured_events = len(s.pending_audit)  # events added during this save stay pending for the next one
         audit = [_event(e.actor, e.action, e.detail) for e in s.pending_audit[:captured_events]]
 
-        for capture in new_captures:  # files first: a row must never point at a missing image
-            path = self._image_path(s.id, capture.capture_id)
-            await asyncio.to_thread(_write_file, path, s.evidence_images[capture.capture_id])
+        if not self.images_in_database:
+            for capture in new_captures:  # files first: a row must never point at a missing image
+                path = self._image_path(s.id, capture.capture_id)
+                await asyncio.to_thread(_write_file, path, s.evidence_images[capture.capture_id])
 
         async with self._sessionmaker() as db, db.begin():
             row = await db.get(ClaimRow, s.id)
@@ -76,8 +80,11 @@ class ClaimRepository:
             for seq, turn in new_turns:
                 db.add(TurnRow(claim_id=s.id, turn_id=turn.id, seq=seq, speaker=turn.speaker, text=turn.text))
             for c in new_captures:
+                in_db = self.images_in_database
                 db.add(EvidenceRow(
-                    capture_id=c.capture_id, claim_id=s.id, file_path=str(self._image_path(s.id, c.capture_id)),
+                    capture_id=c.capture_id, claim_id=s.id,
+                    file_path="" if in_db else str(self._image_path(s.id, c.capture_id)),
+                    image=s.evidence_images[c.capture_id] if in_db else None,
                     caption=c.caption, claimant_claim=c.claimant_claim, confirmed=c.confirmed,
                     document_types=[t.value for t in c.document_types], source=c.source, captured_at=c.captured_at,
                 ))
@@ -158,9 +165,10 @@ class ClaimRepository:
                 f"Capture {e.capture_id}: {e.caption} (claimant said: {e.claimant_claim or 'nothing'}; "
                 f"{'confirmed' if e.confirmed else 'not confirmed'})"
             )
-            path = Path(e.file_path)
-            if path.exists():
-                s.evidence_images[e.capture_id] = await asyncio.to_thread(path.read_bytes)
+            if e.image is not None:
+                s.evidence_images[e.capture_id] = e.image
+            elif e.file_path and Path(e.file_path).exists():
+                s.evidence_images[e.capture_id] = await asyncio.to_thread(Path(e.file_path).read_bytes)
         s.revision = row.revision
         if row.result_json:
             s.result = PipelineResult.model_validate_json(row.result_json)
