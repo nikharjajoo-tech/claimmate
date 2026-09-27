@@ -14,7 +14,7 @@ How to reproduce any row: `python -m app.eval --provider groq --models <model> -
 | B | 2026-09-25 | groq gpt-oss-20b | split | v1 | 97.9% | 89.6% ❌ | 100% (7/7) | **4** ❌ | 33/50 (2 errors) | 2.1 s | 101.6K / 30.0K |
 | C | 2026-09-26 | groq gpt-oss-120b | single (1 call) | v1 | 96.4% | 94.0% | 100% (7/7) | 0 | 27/50 | 2.5 s* | 90.8K / 37.0K |
 | E | 2026-09-26 | groq gpt-oss-20b | split | **v2** | **98.2%** | 96.0% | 100% (7/7) | 1 ❌ | **39/50** | 2.0 s | 133.5K / 28.2K |
-| D | planned | gpt-oss-120b | split (per D8) | v2 | | | | | | | |
+| D | 2026-09-27 | groq gpt-oss-120b | split | v2 | **98.7%** | 94.0% | 100% (7/7) | 0 | **42/50** | 3.4 s | 132.8K / 39.7K |
 
 All four PRD targets (F1 ≥ 90%, routing ≥ 90%, safety recall 100%, zero false escalations) were
 met by the first baseline.
@@ -103,6 +103,33 @@ Compared with run B (same model, same pipeline, only the prompt changed):
 - **Decision:** 20b + v2 is the fastest setup that meets 3 of 4 targets (p50 2.0 s), but one false
   escalation fails the safety bar, so gpt-oss-120b stays the production model. Run D tests v2 on 120b;
   v2 becomes the default only if D meets every target and beats run A.
+
+## Run D: prompt v2 on the production model (gpt-oss-120b)
+
+Compared with run A (same model and pipeline, only the prompt changed):
+
+| | A: v1 | D: v2 |
+|---|---|---|
+| Field F1 | 96.8% | **98.7%** |
+| Evidence status accuracy | 78.6% | **94.6%** |
+| Fully passed | 32/50 | **42/50** |
+| Routing accuracy | **96.0%** | 94.0% |
+| Hallucinated fields | **0** | 1 |
+| Wrong dates | **0** | 2 |
+| LLM time per claim, p50 | **2.9 s** | 3.4 s (longer prompt) |
+
+- v2 met all four targets and made 13 scenarios fully pass that failed before (document types,
+  bare policy numbers, and year-less dates like "September 2nd" now resolve).
+- **But its date rule backfired twice.** Asked to resolve "Sunday the 20th" to the most recent such
+  date, the model did its own calendar arithmetic and answered 2025-07-20 (co-02); "Monday the 21st"
+  became 2026-03-21 (po-05). The true dates, 2026-09-20 and 2026-09-21, were days before the call. The
+  wrong dates made the late-report rule send two honest claims to fraud investigation.
+- One new hallucination: "I filed a police report yesterday" filled `reported_date` (in-03).
+- **Decision: v2 is not promoted.** A blank date costs a follow-up question; a wrong date flags an
+  innocent claimant for fraud. v1 stays the default.
+- **Next (prompt v3):** stop asking the model to do calendar arithmetic. The model extracts the date
+  as said ("Sunday the 20th"); deterministic code resolves it against the reference date. This applies
+  the project's rule (AI perceives, code decides) to dates.
 
 ## Known scenario issues (scenario set frozen; to fix in a future set version)
 
