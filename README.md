@@ -52,7 +52,9 @@ separate vision model and marked confirmed only if it really shows what the clai
 **Adjuster view:** set `CLAIMVOICE_ADJUSTER_PASSCODE` in `.env`, restart, and open
 **http://localhost:8000/#/adjuster**. Claims appear in a queue with urgent ones first; opening a claim
 starts review and freezes its route, and every action lands in the audit trail. Claims are stored in
-SQLite (`backend/data/`), so they survive restarts; the schema is managed with Alembic (`make migrate`).
+SQLite (`backend/data/`) by default, so they survive restarts. For a hosted database, set
+`CLAIMVOICE_DATABASE_URL` to a PostgreSQL connection string (for example from [Neon](https://neon.tech));
+migrations run automatically at startup. CI runs the database tests on both SQLite and PostgreSQL.
 
 For frontend development with hot reload, run `make serve` in `backend/` and `npm run dev` in
 `frontend/`, then open http://localhost:5173 (Vite proxies `/api` and `/ws` to the backend).
