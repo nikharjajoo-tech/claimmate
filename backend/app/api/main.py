@@ -156,6 +156,8 @@ def create_app(
             "live_model": settings.live_model,
             "tools": TOOL_NAMES,
             "sessions": len(store),
+            # Set by Render; lets CI confirm a deploy actually went live.
+            "commit": os.getenv("RENDER_GIT_COMMIT", "")[:7] or None,
         }
 
     @app.post("/api/claims", status_code=201)
