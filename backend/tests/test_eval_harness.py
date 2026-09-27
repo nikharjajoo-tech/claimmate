@@ -6,7 +6,14 @@ from app.eval.report import check_targets, compute_metrics, render_markdown
 from app.eval.runner import PacedLLM, run_eval
 from app.eval.scenario import load_scenarios
 from app.llm.client import LLMCall, LLMResult
-from app.pipeline.prompts import ClaimAnalysis, ClaimAnalysisV2, ClaimFactsV2, render_transcript
+from app.pipeline.prompts import (
+    ClaimAnalysis,
+    ClaimAnalysisV2,
+    ClaimAnalysisV3,
+    ClaimFactsV2,
+    ClaimFactsV3,
+    render_transcript,
+)
 
 SCENARIOS = load_scenarios()
 
@@ -19,7 +26,7 @@ class OracleLLM:
         self.current = None
 
     async def generate(self, *, step, system, prompt, schema):
-        if schema in (ClaimFacts, ClaimAnalysis, ClaimFactsV2, ClaimAnalysisV2):
+        if schema in (ClaimFacts, ClaimAnalysis, ClaimFactsV2, ClaimAnalysisV2, ClaimFactsV3, ClaimAnalysisV3):
             self.current = next(s for s in SCENARIOS if render_transcript(s.transcript()) in prompt)
             facts = self.current.gold_claim_facts()
             if self.current.id in self.sabotage:
@@ -33,6 +40,13 @@ class OracleLLM:
             value = ClaimFactsV2.model_validate(facts.model_dump())
         elif schema is ClaimAnalysisV2:
             value = ClaimAnalysisV2(facts=ClaimFactsV2.model_validate(facts.model_dump()), classification=classification)
+        elif schema in (ClaimFactsV3, ClaimAnalysisV3):
+            # v3: the "model" returns date words (here the gold ISO date); code resolves them
+            data = facts.model_dump(exclude={"date_of_loss", "reported_date"})
+            v3 = ClaimFactsV3.model_validate(
+                {**data, "date_of_loss_text": facts.date_of_loss, "reported_date_text": facts.reported_date}
+            )
+            value = v3 if schema is ClaimFactsV3 else ClaimAnalysisV3(facts=v3, classification=classification)
         else:
             value = classification
         return LLMResult[schema](
@@ -40,7 +54,8 @@ class OracleLLM:
         )
 
 
-@pytest.mark.parametrize(("mode", "prompt"), [("split", "v1"), ("single", "v1"), ("split", "v2"), ("single", "v2")])
+@pytest.mark.parametrize("mode", ["split", "single"])
+@pytest.mark.parametrize("prompt", ["v1", "v2", "v3"])
 async def test_oracle_scores_perfectly_on_all_scenarios(mode, prompt):
     results = await run_eval(SCENARIOS, OracleLLM(), concurrency=1, mode=mode, prompt_version=prompt)
     failures = [(r.id, r.error or r.rule_problems) for r in results if not r.passed]

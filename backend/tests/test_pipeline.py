@@ -222,3 +222,43 @@ def test_v2_schema_cannot_express_received_evidence():
 
     with pytest.raises(pydantic.ValidationError):
         EvidenceMention(document_type="damage_photo", status="received")
+
+
+def test_empty_database_setting_falls_back_to_local_sqlite(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("CLAIMVOICE_DATABASE_URL", "")
+    get_settings.cache_clear()
+    try:
+        assert get_settings().database_url.startswith("sqlite+aiosqlite:///")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v3_is_v2_with_only_the_date_rules_changed():
+    from app.pipeline.prompts import _V2_DATE_RULES, _V3_DATE_RULES, EXTRACT_SYSTEM_V2, EXTRACT_SYSTEM_V3
+
+    assert EXTRACT_SYSTEM_V3 == EXTRACT_SYSTEM_V2.replace(_V2_DATE_RULES, _V3_DATE_RULES)
+    assert _V3_DATE_RULES in EXTRACT_SYSTEM_V3 and _V2_DATE_RULES not in EXTRACT_SYSTEM_V3
+
+
+async def test_v3_dates_are_resolved_by_code_not_the_model():
+    from app.pipeline.graph import build_graph
+    from app.pipeline.prompts import ClaimAnalysisV3, ClaimFactsV3
+
+    facts = ClaimFactsV3.model_validate(
+        {**FACTS.model_dump(exclude={"date_of_loss", "reported_date", "evidence"}),
+         "date_of_loss_text": "Sunday the 20th", "reported_date_text": "not specified"}
+    )
+
+    class V3LLM:
+        async def generate(self, *, step, system, prompt, schema, image=None):
+            value = {ClaimFactsV3: facts, Classification: CLASSIFICATION,
+                     ClaimAnalysisV3: ClaimAnalysisV3(facts=facts, classification=CLASSIFICATION)}[schema]
+            return LLMResult[schema](value=value, call=LLMCall(step=step, model="f", attempts=1, latency_ms=1))
+
+    for mode in ("split", "single"):
+        llm = V3LLM()
+        result = await run_pipeline(llm, TURNS, today=TODAY, graph=build_graph(llm, mode, "v3"))
+        assert result.facts.date_of_loss == "2026-09-20"  # TODAY is 2026-09-24, a Thursday
+        assert result.facts.reported_date == "not specified"

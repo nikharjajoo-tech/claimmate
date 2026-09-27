@@ -63,9 +63,10 @@ def get_settings() -> Settings:
         pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
         prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "v1").strip().lower(),
         # CLAIMVOICE_DATABASE_URL may be a SQLAlchemy URL or a Turso libsql:// URL (decision D7).
-        database_url=os.getenv("CLAIMVOICE_DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}"),
+        # An empty value (e.g. "CLAIMVOICE_DATABASE_URL=" in .env) means the default, not "no URL".
+        database_url=os.getenv("CLAIMVOICE_DATABASE_URL", "").strip() or f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}",
         turso_auth_token=os.getenv("TURSO_AUTH_TOKEN", "").strip(),
-        evidence_dir=Path(os.getenv("CLAIMVOICE_EVIDENCE_DIR", str(DATA_DIR / "evidence"))),
+        evidence_dir=Path(os.getenv("CLAIMVOICE_EVIDENCE_DIR", "").strip() or str(DATA_DIR / "evidence")),
         adjuster_passcode=os.getenv("CLAIMVOICE_ADJUSTER_PASSCODE", "").strip(),
         session_secret=os.getenv("CLAIMVOICE_SESSION_SECRET", "").strip() or secrets.token_hex(32),
         extract_model=os.getenv("CLAIMVOICE_EXTRACT_MODEL", "gemini-3.8-flash"),

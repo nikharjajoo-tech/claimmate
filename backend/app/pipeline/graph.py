@@ -93,7 +93,7 @@ def build_graph(llm: StructuredLLM, mode: PipelineMode = "split", prompt_version
             schema=prompts.analysis_schema(prompt_version),
         )
         return {
-            "facts": prompts.to_claim_facts(result.value.facts),
+            "facts": prompts.to_claim_facts(result.value.facts, state["today"]),
             "classification": result.value.classification,
             "llm_calls": [result.call],
         }
@@ -107,7 +107,7 @@ def build_graph(llm: StructuredLLM, mode: PipelineMode = "split", prompt_version
             prompt=prompts.extract_prompt(state["turns"], state.get("observations", []), state["today"]),
             schema=prompts.extraction_schema(prompt_version),
         )
-        return {"facts": prompts.to_claim_facts(result.value), "llm_calls": [result.call]}
+        return {"facts": prompts.to_claim_facts(result.value, state["today"]), "llm_calls": [result.call]}
 
     async def classify(state: ClaimState) -> dict[str, Any]:
         if not _has_claimant_speech(state):

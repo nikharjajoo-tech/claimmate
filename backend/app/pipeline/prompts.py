@@ -7,8 +7,10 @@ from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
-from app.domain.models import ClaimFacts, ClaimType, Classification, DocumentType
+from app.domain.models import NOT_SPECIFIED, ClaimFacts, ClaimType, Classification, DocumentType
+from app.pipeline.dates import resolve_iso
 
 
 class Turn(BaseModel):
@@ -90,6 +92,25 @@ DOCUMENT_GLOSSARY: dict[DocumentType, str] = {
 
 _GLOSSARY_TEXT = "\n".join(f"    {t.value}: {meaning}" for t, meaning in DOCUMENT_GLOSSARY.items())
 
+_V2_DATE_RULES = """- date_of_loss: a single calendar date as YYYY-MM-DD, resolved against the reference date:
+    "yesterday", "last night", "Monday" -> the most recent such day on or before the reference date
+    "September 2nd", "Saturday the 19th", "the 14th" -> that date in the reference date's month or
+      year, taking the most recent one on or before the reference date
+  These are exact dates, not uncertain ones. Keep "not specified" only when the claimant gives
+  a range ("between the 10th and 15th"), says they are unsure, or gives no date; then list it
+  in uncertain_facts.
+- reported_date: only when the claimant says they already reported this loss earlier on a
+  specific date ("I reported it on the 10th"). This conversation is not a report date; leave
+  "not specified" otherwise."""
+_V3_DATE_RULES = """- date_of_loss_text: the claimant's own words for the day the loss happened, copied exactly,
+  after applying any correction ("Sunday the 20th", "last night", "September 2nd", "Tuesday").
+  Copy only the words about the day, not the time ("the 14th", not "the 14th around 3 PM").
+  Do NOT convert it to a calendar date: the system resolves it. Use "not specified" if they give
+  a range, say they are unsure, or never say when; then list it in uncertain_facts.
+- reported_date_text: only when the claimant says they already reported THIS CLAIM to the
+  insurer on an earlier day ("I reported it to your office on the 10th"), copied as said.
+  Filing a police report is not reporting the claim. Otherwise "not specified"."""
+
 EXTRACT_SYSTEM_V2 = f"""
 You are the intake analyst for an insurance first-notice-of-loss team. You turn a conversation
 between a claimant and an intake agent into structured facts. You never decide coverage.
@@ -151,11 +172,15 @@ Fields
   identity). Do not list missing documents here.
 """.strip()
 
-PROMPT_VERSIONS = ("v1", "v2")
+# v3: v2 with one change (decision D10): the model copies date words and code resolves them,
+# because in run D the model's own calendar arithmetic produced wrong dates.
+EXTRACT_SYSTEM_V3 = EXTRACT_SYSTEM_V2.replace(_V2_DATE_RULES, _V3_DATE_RULES)
+
+PROMPT_VERSIONS = ("v1", "v2", "v3")
 
 
 def extract_system(version: str = "v1") -> str:
-    return {"v1": EXTRACT_SYSTEM_V1, "v2": EXTRACT_SYSTEM_V2}[version]
+    return {"v1": EXTRACT_SYSTEM_V1, "v2": EXTRACT_SYSTEM_V2, "v3": EXTRACT_SYSTEM_V3}[version]
 
 
 def analyze_system(version: str = "v1") -> str:
@@ -214,17 +239,38 @@ class ClaimAnalysisV2(BaseModel):
     classification: Classification
 
 
+class ClaimFactsV3(ClaimFactsV2):
+    """v3 extraction schema: dates arrive as the claimant's words; code resolves them."""
+
+    date_of_loss: SkipJsonSchema[str] = NOT_SPECIFIED  # filled by the resolver, never by the model
+    reported_date: SkipJsonSchema[str] = NOT_SPECIFIED
+    date_of_loss_text: str = Field(default=NOT_SPECIFIED, description="The claimant's words for the day of the loss.")
+    reported_date_text: str = Field(default=NOT_SPECIFIED, description="Only an earlier report of this claim to the insurer.")
+
+
+class ClaimAnalysisV3(BaseModel):
+    facts: ClaimFactsV3
+    classification: Classification
+
+
 def extraction_schema(version: str) -> type[BaseModel]:
-    return ClaimFactsV2 if version == "v2" else ClaimFacts
+    return {"v2": ClaimFactsV2, "v3": ClaimFactsV3}.get(version, ClaimFacts)
 
 
 def analysis_schema(version: str) -> type[BaseModel]:
-    return ClaimAnalysisV2 if version == "v2" else ClaimAnalysis
+    return {"v2": ClaimAnalysisV2, "v3": ClaimAnalysisV3}.get(version, ClaimAnalysis)
 
 
-def to_claim_facts(value: BaseModel) -> ClaimFacts:
-    """Normalize any version's extraction output to the domain model the rules engine reads."""
-    return value if type(value) is ClaimFacts else ClaimFacts.model_validate(value.model_dump())
+def to_claim_facts(value: BaseModel, today: date) -> ClaimFacts:
+    """Normalize any version's extraction output to the domain model the rules engine reads.
+    For v3, dates are resolved here, deterministically, from the claimant's words."""
+    if type(value) is ClaimFacts:
+        return value
+    data = value.model_dump()
+    if isinstance(value, ClaimFactsV3):
+        data["date_of_loss"] = resolve_iso(data.pop("date_of_loss_text"), today)
+        data["reported_date"] = resolve_iso(data.pop("reported_date_text"), today)
+    return ClaimFacts.model_validate(data)
 
 
 class ClaimAnalysis(BaseModel):

@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument("--models", help="comma-separated model chain for the provider (default: from .env); "
                         "pin a single model so every scenario is scored against the same one")
     parser.add_argument("--pipeline", choices=["split", "single"], help="pipeline mode (default: from .env)")
-    parser.add_argument("--prompt", choices=["v1", "v2"], help="extraction prompt version (default: from .env)")
+    parser.add_argument("--prompt", choices=["v1", "v2", "v3"], help="extraction prompt version (default: from .env)")
     parser.add_argument("--check", action="store_true", help="exit 1 if any PRD target is missed")
     args = parser.parse_args()
     logging.basicConfig(level=logging.ERROR, format="%(levelname)s %(name)s: %(message)s")
