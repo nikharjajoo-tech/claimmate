@@ -1,4 +1,4 @@
-# How ClaimVoice Works: Input → Process → Output
+# How ClaimMate Works: Input → Process → Output
 
 This walks through what a person does, what the system does behind the scenes, and what comes
 out, using a real run of the pipeline. Section 4 covers the eval harness the same way.

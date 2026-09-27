@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Logo } from "../components/Logo";
 import { adjusterApi, HttpError } from "../lib/adjuster";
 import { ClaimDetailView } from "./ClaimDetailView";
 import { OperationsPanel } from "./OperationsPanel";
@@ -34,10 +35,10 @@ export default function AdjusterApp() {
     <div className="app adjuster">
       <header className="topbar">
         <div className="brand">
-          <span className="logo" aria-hidden>
-            ◉
+          <Logo />
+          <span className="brand-name">
+            Claim<b>Mate</b>
           </span>
-          ClaimVoice
           <span className="muted">Adjuster review</span>
         </div>
         <div className="actions">

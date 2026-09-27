@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ROUTE_LABEL } from "../components/Notebook";
+import { ROUTE_LABEL, title } from "../components/Notebook";
 import { adjusterApi, type ClaimDetail, HttpError } from "../lib/adjuster";
 import type { ClaimStatus, Route } from "../lib/types";
 
@@ -72,7 +72,7 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
         <div>
           <h2>{name}</h2>
           <p className="muted">
-            Claim {state.id.slice(0, 8)} · {(state.claim_type ?? "type pending").replace(/_/g, " ")}
+            Claim {state.id.slice(0, 8)} · {state.claim_type ? title(state.claim_type) : "Type pending"}
             {state.severity && ` · ${state.severity} severity`} · <span className={`pill pill-${state.status}`}>{state.status.replace("_", " ")}</span>
           </p>
         </div>

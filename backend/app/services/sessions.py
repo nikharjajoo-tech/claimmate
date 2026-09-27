@@ -26,7 +26,7 @@ MAX_SESSIONS = 64
 MAX_SESSIONS_PER_OWNER = 4
 PIPELINE_TIMEOUT_S = 90
 
-GREETING = "I can start your claim while we talk. First, is everyone safe right now?"
+GREETING = "Hi, I'm ClaimMate. I can start your claim while we talk. First, is everyone safe right now?"
 
 PipelineRunner = Callable[..., Awaitable[PipelineResult]]
 

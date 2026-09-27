@@ -8,7 +8,12 @@ export const ROUTE_LABEL: Record<Route, string> = {
   ready_for_adjuster: "Ready for adjuster",
 };
 
-const title = (value: string | null) => (value ? value.replace(/_/g, " ") : "—");
+/** "home_water_damage" -> "Home water damage" (sentence case, as Material recommends). */
+export const title = (value: string | null) => {
+  if (!value) return "—";
+  const text = value.replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 
 export function Notebook({ claim, tools }: { claim: ClaimView | null; tools: ToolActivity[] }) {
   if (!claim) return <section className="panel notebook">Starting a claim…</section>;

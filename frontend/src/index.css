@@ -1,4 +1,4 @@
-/* ClaimVoice theme, following Material Design 3 (Google's open design system).
+/* ClaimMate theme, following Material Design 3 (Google's open design system).
    Colors use M3 roles; the font is Google Sans Flex (SIL OFL, self-hosted in /public/fonts). */
 
 @font-face {
@@ -89,11 +89,9 @@ button, input, select, textarea { font-family: inherit; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 64px; margin-bottom: 8px; }
 .brand { display: flex; align-items: center; gap: 12px; font-size: 1.35rem; font-weight: 500; }
 .brand .muted { font-size: 0.95rem; font-weight: 400; }
-.logo { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 0; }
-.logo::before {
-  content: ""; width: 18px; height: 18px; background: currentColor;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z'/%3E%3C/svg%3E") center / contain no-repeat;
-}
+.logo { flex: none; display: block; }
+.brand-name { letter-spacing: -0.01em; }
+.brand-name b { font-weight: 700; background: linear-gradient(90deg, #1a73e8, #7b61ff 55%, #c058d6); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---- buttons (M3: filled, outlined) ---- */
@@ -149,7 +147,7 @@ button, input, select, textarea { font-family: inherit; }
 
 /* ---- notebook ---- */
 .notebook-head, .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-.notebook-head p, .detail-head p { margin: 4px 0 0; text-transform: capitalize; }
+.notebook-head p, .detail-head p { margin: 4px 0 0; }
 .stamp { font-size: 0.82rem; font-weight: 500; padding: 6px 12px; border-radius: 8px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
 .stamp-emergency_escalation { background: var(--danger-bg); color: var(--danger); }
 .stamp-special_investigation, .stamp-policy_review, .stamp-needs_docs { background: var(--warn-bg); color: var(--warn); }

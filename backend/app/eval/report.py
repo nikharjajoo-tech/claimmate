@@ -148,7 +148,7 @@ def check_targets(m: dict[str, Any]) -> list[tuple[str, str, bool]]:
 
 
 def render_markdown(m: dict[str, Any], results: list[ScenarioResult], meta: dict[str, str]) -> str:
-    out: list[str] = ["# ClaimVoice Eval Report", ""]
+    out: list[str] = ["# ClaimMate Eval Report", ""]
     out += [f"- **{k}:** {v}" for k, v in meta.items()]
     out += [
         f"- **Scenarios:** {m['scenarios']} ({m['completed']} completed, {m['errors']} errors); "

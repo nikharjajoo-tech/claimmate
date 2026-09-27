@@ -1,4 +1,6 @@
-# ClaimVoice
+# ClaimMate
+
+**Your personal AI claim assistant.**
 
 **Live demo: https://claimvoice-v2rh.onrender.com** (free tier: the first visit after 15 idle minutes
 takes about a minute to wake up). All policies and people in the demo are fictional.

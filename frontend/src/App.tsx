@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Logo } from "./components/Logo";
 import { CallPanel } from "./components/CallPanel";
 import { Notebook } from "./components/Notebook";
 import { api, LiveConnection } from "./lib/api";
@@ -214,11 +215,11 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo" aria-hidden>
-            ◉
+          <Logo />
+          <span className="brand-name">
+            Claim<b>Mate</b>
           </span>
-          ClaimVoice
-          <span className="muted">Report a claim by talking</span>
+          <span className="muted">Your personal AI claim assistant</span>
         </div>
         <div className="actions">
           <a className="btn" href="#/adjuster">

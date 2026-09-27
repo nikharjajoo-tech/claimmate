@@ -1,4 +1,4 @@
-# ClaimVoice: one image serving the API, the live WebSocket, and the built React UI.
+# ClaimMate: one image serving the API, the live WebSocket, and the built React UI.
 
 # --- 1. Build the frontend -----------------------------------------------------
 FROM node:20-alpine AS frontend

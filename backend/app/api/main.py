@@ -121,7 +121,7 @@ def create_app(
             if engine is not None:
                 await engine.dispose()
 
-    app = FastAPI(title="ClaimVoice API", lifespan=lifespan)
+    app = FastAPI(title="ClaimMate API", lifespan=lifespan)
     app.add_middleware(SecurityMiddleware)
     create_limiter = RateLimiter(limit=10, window_s=60)
     app.add_middleware(

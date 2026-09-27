@@ -1,4 +1,4 @@
-# PRD: ClaimVoice — Real-time Voice AI Agent for Insurance Claim Intake
+# PRD: ClaimMate — Your Personal AI Claim Assistant
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## 1. Summary
 
-ClaimVoice lets a policyholder report an insurance loss by **talking to a voice agent** and optionally
+ClaimMate lets a policyholder report an insurance loss by **talking to a voice agent** and optionally
 **showing the damage on camera**. While the conversation flows, a background pipeline extracts
 structured facts, verifies the policy, applies auditable business rules, and routes the claim. Human
 adjusters work the result from a **review dashboard** instead of re-interviewing the claimant.
@@ -316,6 +316,7 @@ SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · 
 | D7 result | Turso compatibility test (2026-09-26): **the service is compatible** (SQLAlchemy through an aiosqlite bridge, Alembic migrations, and claim saves all worked), but **the Python driver is not production-ready**: `turso_serverless` 0.1.0 opens a new HTTPS connection per statement (~0.45 s each, so a claim save takes seconds) and sets no request timeout (a stalled request hung the connection twice). The adapter stays in the code as experimental and opt-in. **Hosted database choice pending.** | 2026-09-26 |
 | D10 | Prompt v2 not promoted despite meeting all targets (run D: 42/50 fully passed vs 32) because model-computed dates sent two honest claims to fraud investigation. Next: v3 with deterministic date resolution | 2026-09-27 |
 | D9 | Hosted database: **PostgreSQL on Neon** (free tier), via asyncpg. Local development keeps SQLite; CI runs the database tests on both SQLite and a PostgreSQL service container. Turso stays experimental (see D7 result) | 2026-09-26 |
+| D11 | Product renamed from ClaimVoice to **ClaimMate — "Your personal AI claim assistant"**, with an original gradient speech-bubble-and-sparkle logo. Internal identifiers (`CLAIMVOICE_*` settings, cookies) are unchanged to keep existing configuration and the live deployment working | 2026-09-27 |
 | D8 | Keep the two-call (split) pipeline. Eval run C: one call was ~0.4 s faster per claim but less accurate (27 vs 32 scenarios fully passed) and recorded an injected $50,000 amount; see [eval results](04-eval-results.md) | 2026-09-26 |
 
 ### Open

@@ -1,4 +1,4 @@
-# Requirements: ClaimVoice — Real-time Voice AI Agent for Insurance Claim Intake
+# Requirements: ClaimMate — Your Personal AI Claim Assistant
 
 > Working name. Inspired by the reference project (see `01-reference-analysis.md`), but rebuilt with
 > its own architecture and extended where the reference stops: persistence, a human adjuster
