@@ -68,6 +68,16 @@ Try saying: *"Hi, I'm Elena Brooks, policy H O 2 0 4 1 7. Our basement flooded l
 sump pump failed. Nobody is hurt."* All policies and people in the demo are fictional; see
 `backend/app/domain/policy_store.py`.
 
+## Deployment
+
+The live demo runs on Render's free tier (Singapore) with a Neon PostgreSQL database, both in the same
+region. Deploys go through CI, with no Render-GitHub connection:
+
+1. A push to `main` runs the backend, PostgreSQL, frontend, and Docker jobs.
+2. Only if all pass, the `deploy` job calls the service's Render deploy hook (an encrypted repository
+   secret, `RENDER_DEPLOY_HOOK_URL`, that can only trigger deploys of this service).
+3. It then waits until `/api/health` on the live site reports the new commit.
+
 ## Other ways to run the pipeline
 
 ```bash
