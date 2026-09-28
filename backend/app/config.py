@@ -62,7 +62,8 @@ def get_settings() -> Settings:
         ),
         pipeline_provider=os.getenv("CLAIMVOICE_PIPELINE_PROVIDER", "auto").strip().lower(),
         pipeline_mode=os.getenv("CLAIMVOICE_PIPELINE_MODE", "split").strip().lower(),
-        prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "v1").strip().lower(),
+        # v3 promoted 2026-09-28 (decision D12, eval run G). Older versions stay for comparison.
+        prompt_version=os.getenv("CLAIMVOICE_PROMPT_VERSION", "").strip().lower() or "v3",
         # CLAIMVOICE_DATABASE_URL may be a SQLAlchemy URL or a Turso libsql:// URL (decision D7).
         # An empty value (e.g. "CLAIMVOICE_DATABASE_URL=" in .env) means the default, not "no URL".
         database_url=os.getenv("CLAIMVOICE_DATABASE_URL", "").strip() or f"sqlite+aiosqlite:///{DATA_DIR / 'claimvoice.db'}",

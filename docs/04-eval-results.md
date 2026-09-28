@@ -16,10 +16,30 @@ How to reproduce any row: `python -m app.eval --provider groq --models <model> -
 | E | 2026-09-26 | groq gpt-oss-20b | split | **v2** | **98.2%** | 96.0% | 100% (7/7) | 1 ❌ | **39/50** | 2.0 s | 133.5K / 28.2K |
 | D | 2026-09-27 | groq gpt-oss-120b | split | v2 | **98.7%** | 94.0% | 100% (7/7) | 0 | **42/50** | 3.4 s | 132.8K / 39.7K |
 | F | 2026-09-27 | groq gpt-oss-20b | split | **v3** | **99.3%** | 96.0% | 100% (7/7) | 1 ❌ | 42/50 | 2.0 s | 132.6K / 29.4K |
-| G | planned | gpt-oss-120b | split | v3 | | | | | | | |
+| **G** | 2026-09-28 | groq gpt-oss-120b | split | **v3** | **99.2%** | **98.0%** | **100%** (7/7) | **0** | **42/50** | 3.3 s | 132.6K / 39.6K |
+
+**Current production configuration: run G (gpt-oss-120b, split pipeline, prompt v3), promoted
+2026-09-28 (decision D12).**
 
 All four PRD targets (F1 ≥ 90%, routing ≥ 90%, safety recall 100%, zero false escalations) were
-met by the first baseline.
+met by the first baseline and by the promoted configuration.
+
+## Summary: baseline to production
+
+| | A: first baseline | G: production |
+|---|---|---|
+| Field F1 | 96.8% | **99.2%** |
+| Routing accuracy | 96.0% | **98.0%** |
+| Date accuracy | 88.0% | **100%** |
+| Evidence status accuracy | 78.6% | **89.3%** |
+| Fully passed scenarios | 32/50 | **42/50** |
+| Hallucinated fields | 0 | 0 |
+| Safety recall / false escalations | 100% / 0 | 100% / 0 |
+| LLM time per claim, p50 | **2.9 s** | 3.3 s |
+
+Along the way, the evals rejected two changes that looked like improvements: one LLM call instead of
+two (run C: less accurate, and it recorded an injected $50,000 amount) and prompt v2 on its own
+(run D: model-computed dates sent two honest claims to fraud review).
 
 \* Run C latency counts only the 28 claims whose call succeeded first time; the other 22 waited out
 per-minute rate limits (its larger single requests hit Groq's 8K tokens/minute cap more often).
@@ -150,6 +170,18 @@ v3 changes only the date rules: the model copies the claimant's words ("Sunday t
 - Every date was right, including the weekday-plus-day cases that went wrong in run D.
 - The remaining false escalation is the smaller model's hp-08 limit, unchanged by the prompt.
 - **Next:** run G (v3 on gpt-oss-120b). v3 becomes the default if G meets every target and beats A.
+
+## Run G: prompt v3 on the production model (promoted)
+
+- Met all four targets; beat run A on F1 (99.2% vs 96.8%), routing (98.0% vs 96.0%; fixed ev-04,
+  broke none), dates (100% vs 88%), evidence (89.3% vs 78.6%), and fully passed scenarios (42 vs 32),
+  with zero hallucinated fields and zero false escalations.
+- Cost: +0.4 s LLM time per claim (3.3 s vs 2.9 s p50) from the longer prompt, well inside the 6 s
+  pipeline target; the pipeline runs in the background during a call.
+- Remaining misses: co-04 still reads the spelled-out "H A D D A D" as "Hadad"; hp-04 chose the
+  destination ("Lisbon") over the departure city ("Miami") for a cancelled flight, which is arguable;
+  in-02 left a location blank.
+- **Decision D12: v3 is the default.**
 
 ## Known scenario issues (scenario set frozen; to fix in a future set version)
 
