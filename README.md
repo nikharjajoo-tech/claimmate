@@ -101,14 +101,14 @@ backend/
   app/api/         FastAPI app + adjuster API
   app/eval/        eval harness; scenarios in eval/scenarios/*.yaml
 frontend/src/      React + TypeScript call page and claim notebook
-docs/              PRD, requirements, reference analysis, how it works
+docs/              PRD, requirements, how it works, workflows, eval results
 ```
 
 ## Docs
 
 - [PRD](docs/00-PRD.md): problem, users, metrics, architecture, milestones
 - [How it works](docs/03-how-it-works.md): input → process → output, with a real run
-- [Requirements](docs/02-requirements.md) · [Reference analysis](docs/01-reference-analysis.md)
+- [Requirements](docs/02-requirements.md) · [User workflows](docs/05-user-workflows.md) · [Eval results](docs/04-eval-results.md)
 
 This is a demo. It does not confirm coverage, liability, or payment, and it has not been reviewed for
 production use with real personal data.

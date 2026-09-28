@@ -1,8 +1,7 @@
 # Requirements: ClaimMate — Your Personal AI Claim Assistant
 
-> Working name. Inspired by the reference project (see `01-reference-analysis.md`), but rebuilt with
-> its own architecture and extended where the reference stops: persistence, a human adjuster
-> workflow, an evaluation harness, and observability.
+> Detailed functional and non-functional requirements. The product overview, users, and success
+> metrics are in the [PRD](00-PRD.md).
 
 ## 1. Goal
 
@@ -39,7 +38,7 @@ routed claim** that a human adjuster can review in a dashboard.
 | `lookup_policy` | Verify policy number against policy DB; normalize voice errors (O vs 0, spaces) | Interrupt if lapsed/not found, else when idle |
 | `update_claim` | Run the claim pipeline on the conversation so far; return routing + open items | Interrupt on safety escalation |
 | `capture_evidence` | Freeze current camera frame, verify it with a separate vision call, store it | When idle |
-| `escalate_to_human` *(new)* | Mark claim urgent and push to the top of the adjuster queue | Interrupt |
+| `escalate_to_human` | Mark claim urgent and push to the top of the adjuster queue | Interrupt |
 
 The conversation never blocks waiting for a tool.
 
@@ -69,24 +68,24 @@ The conversation never blocks waiting for a tool.
 - FR-5.3 Agent never promises coverage, payment, liability, or approval.
 - FR-5.4 Output guardrail check on agent transcripts (flag forbidden phrases in eval + logs).
 
-### FR-6 Persistence *(new vs reference)*
+### FR-6 Persistence
 - FR-6.1 Claims, turns, extracted facts, rule findings, evidence, and audit events stored in a DB.
 - FR-6.2 Evidence images stored on disk/object storage, referenced by ID.
 - FR-6.3 Server restart does not lose claims.
 
-### FR-7 Adjuster dashboard *(new)*
+### FR-7 Adjuster dashboard
 - FR-7.1 Claim queue sorted by severity/route; filter by route and claim type.
 - FR-7.2 Claim detail: facts with source-turn highlighting, evidence gallery, findings, audit trail, transcript.
 - FR-7.3 Adjuster can override routing with a reason (logged to audit trail).
 - FR-7.4 Export packet (Markdown/PDF + evidence ZIP).
 
-### FR-8 Evaluation harness *(new)*
+### FR-8 Evaluation harness
 - FR-8.1 ≥ 50 scripted claim scenarios (text transcripts) with gold labels: fields, claim type, route, safety.
 - FR-8.2 `make eval` runs the pipeline on all scenarios and reports field F1, routing accuracy,
   safety recall, guardrail violations, latency, and token cost.
 - FR-8.3 Includes adversarial cases: corrections, negations, injected instructions, vague claims, lapsed policy.
 
-### FR-9 Observability *(new)*
+### FR-9 Observability
 - FR-9.1 Structured logs with claim ID and turn ID.
 - FR-9.2 Per-claim metrics: tool latencies, pipeline duration, tokens and estimated cost.
 - FR-9.3 PII redaction (phone, email) in logs.
@@ -113,8 +112,8 @@ The conversation never blocks waiting for a tool.
 | DevOps | Docker Compose, GitHub Actions |
 
 ## 6. Out of scope (v1)
-Real carrier integrations, payments, telephony (Twilio) dialing, multi-language, sketch generation
-(the reference's image-gen feature — optional stretch goal).
+Real carrier integrations, payments, telephony (Twilio) dialing, multi-language, and generated
+incident sketches (optional stretch goal).
 
 ## 7. Build plan (milestones)
 

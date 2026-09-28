@@ -5,7 +5,7 @@
 | **Owner** | Nikhar |
 | **Status** | Live demo; M1–M6 complete, M7 nearly done |
 | **Last updated** | 2026-09-25 |
-| **Related docs** | [Reference analysis](01-reference-analysis.md) · [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) · [User workflows](05-user-workflows.md) · [Eval results](04-eval-results.md) |
+| **Related docs** | [Detailed requirements](02-requirements.md) · [How it works](03-how-it-works.md) · [User workflows](05-user-workflows.md) · [Eval results](04-eval-results.md) |
 
 ---
 
