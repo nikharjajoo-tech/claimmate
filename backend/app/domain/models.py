@@ -26,6 +26,16 @@ class ClaimType(StrEnum):
     OTHER = "other"
 
 
+class Product(StrEnum):
+    """What the customer bought. Selects the policy wording a claim is reviewed against (D14c)."""
+
+    HOMEOWNERS = "homeowners"
+    RENTERS = "renters"
+    AUTO = "auto"
+    TRAVEL = "travel"
+    MEDICAL = "medical"
+
+
 class Severity(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
@@ -143,7 +153,8 @@ class EvidenceCapture(BaseModel):
 class PolicyRecord(BaseModel):
     policy_number: str
     policyholder_name: str
-    policy_line: str
+    policy_line: str  # the human label shown in the UI, e.g. "Homeowners (HO-3)"
+    product: Product  # the machine key that selects the policy wording (PRD D14c)
     status: Literal["active", "lapsed", "cancelled"]
     effective_start: date
     effective_end: date
