@@ -140,8 +140,10 @@ Priority: **P0** = required for MVP demo · **P1** = required for v1 · **P2** =
 | F10 | Security hardening, observability, PII redaction | P1 | M7 |
 | F11 | Docker Compose + CI | P1 | M7 |
 | F12 | Incident sketch generation (camera-off illustration) | P2 | — |
+| F13 | Policy review for adjusters: AI reads the full policy wording, cites clauses with code-checked quotes, no coverage or payment decision | P1 | M8 |
 
-Detailed functional requirements (FR-1 … FR-9) are in [02-requirements.md](02-requirements.md).
+Detailed functional requirements (FR-1 … FR-10) are in [02-requirements.md](02-requirements.md).
+Feature F13 is specified in [07-policy-review.md](07-policy-review.md).
 
 ### 7.1 Routing outcomes
 
@@ -289,6 +291,7 @@ SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · 
 | M5 | Camera evidence | Live camera frames to the agent, `capture_evidence` tool, manual capture and photo upload, independent vision verification (Groq qwen3.8-27b → Gemini fallback), evidence gallery and packet section | ✅ Done |
 | M6 | Persistence + adjuster dashboard | SQLite via SQLAlchemy 2.0 async + Alembic (migrations applied at startup, drift-tested); incremental saves with derived audit events; claim lifecycle with route freeze; passcode sign-in (signed 8-hour cookie, rate-limited); queue, claim detail with fact-to-transcript highlighting, status actions, override; packet ZIP with photos. Verified on the live stack, including a server restart. 260 backend + 23 frontend tests | ✅ Done |
 | M7 | Hardening + ship | Masked JSON logs, voice latency, operations panel, security headers and limits, Docker + CI (SQLite and PostgreSQL), Turso test (D7), Neon PostgreSQL (D9), **live on Render free tier: https://claimvoice-v2rh.onrender.com** (verified end to end: typed claim, adjuster review on Neon, live voice via Gemini). Remaining: demo video | 🔄 Nearly done |
+| M8 | Policy review | `product` key on policy records; five versioned policy wordings; policy review service (prompt, strict schema, normalized word-for-word quote checks, verdict-language guard); storage + migration 4, background generation on submission with retry on adjuster open, rate-limited refresh, audit and usage events; adjuster panel with question-to-transcript highlighting and packet section, with tests proving the claimant endpoints never expose it; eval labels on ~15 scenarios (clause recall/precision, question recall) run as a subset on a fresh quota day. Spec: [07-policy-review.md](07-policy-review.md) | 📋 Planned |
 
 ## 14. Risks and mitigations
 
@@ -320,6 +323,12 @@ SQLAlchemy 2.0 async + Alembic (SQLite → Turso, fallback Postgres; see D7) · 
 | D11 | Product renamed from ClaimVoice to **ClaimMate — "Your personal AI claim assistant"**, with an original gradient speech-bubble-and-sparkle logo. Internal identifiers (`CLAIMVOICE_*` settings, cookies) are unchanged to keep existing configuration and the live deployment working | 2026-09-27 |
 | D12 | **Prompt v3 is the default.** Eval run G (gpt-oss-120b): all targets met; F1 99.2% (vs 96.8%), routing 98.0% (vs 96.0%), dates 100% (vs 88%), 42/50 fully passed (vs 32), zero hallucinations and false escalations; +0.4 s LLM time per claim | 2026-09-28 |
 | D13 | Hosted demo on **Render's free tier** (Singapore, next to Neon). Deploys run from CI through a service-scoped deploy hook after all tests pass; no Render–GitHub connection and no stored account API key | 2026-09-27 |
+| D14a | **Policy review is adjuster-only** (dashboard and packet). The claimant never sees it, and the claimant API never returns it | 2026-09-29 |
+| D14b | Version 1 makes **no coverage or payment decision**, in code or by AI: no covered/not covered, no amounts. Arithmetic such as deductibles may come later, clearly labelled | 2026-09-29 |
+| D14c | **One policy wording per product**, five in total (homeowners, renters, personal auto, single-trip travel, supplemental medical); each customer keeps their own declarations page | 2026-09-29 |
+| D14d | When a claimant asks a coverage question, the voice agent may say it has **noted the question for the adjuster** — one line of instruction, no change to coverage behaviour | 2026-09-29 |
+| D14e | The review is generated **only after submission** (and on adjuster refresh), not during intake, which keeps the cost at one LLM call per claim | 2026-09-29 |
+| D14f | Each policy wording is **2-4 pages**, long enough for real exclusions and conditions that the eval scenarios can test | 2026-09-29 |
 
 ### Open
 

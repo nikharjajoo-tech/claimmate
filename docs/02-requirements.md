@@ -90,6 +90,34 @@ The conversation never blocks waiting for a tool.
 - FR-9.2 Per-claim metrics: tool latencies, pipeline duration, tokens and estimated cost.
 - FR-9.3 PII redaction (phone, email) in logs.
 
+### FR-10 Policy review for adjusters (F13, PRD D14)
+Design decisions behind these requirements are in [07-policy-review.md](07-policy-review.md) §9.
+- FR-10.1 Five fictional policy wordings with numbered sections (coverage, exclusions, conditions,
+  claims), one per product. Every policy record carries a `product` key that selects one wording,
+  and wordings are versioned; a review records the wording id and version it read.
+- FR-10.2 A policy review is generated when a claim is submitted, and again when the adjuster asks.
+  Submission never waits for the model and never fails because of it.
+- FR-10.3 The review contains a summary, relevant clauses (section, exact quote, reason), points to
+  check, and claimant questions (exact quote, turn ID).
+- FR-10.4 Code rejects any clause whose quote is not word for word in the cited section, and any
+  question whose quote is not in the cited claimant turn; rejects are dropped and logged. Quotes are
+  compared after normalizing whitespace, quote characters, dashes and case, and must be at least
+  25 characters after normalization.
+- FR-10.5 The review never states a coverage decision or amount; verdict language in the summary is
+  replaced by a code-built summary.
+- FR-10.6 Only signed-in adjusters can read it. The review is merged in at the adjuster call sites
+  only, never inside `session_view`, `build_packet_zip` or the packet markdown, all of which also
+  serve the claimant; tests assert the claimant claim endpoint and claimant packet ZIP expose none
+  of it.
+- FR-10.7 Reviews are stored with the claim (new table, Alembic migration) with status, model,
+  prompt version, wording id and version, the pipeline revision they read, and time; every
+  generation writes an audit event and a usage row the operations panel counts.
+- FR-10.8 If the model is unavailable or the server restarts mid-generation, the claim is still
+  submitted; the panel shows "not ready" with a Retry button, and the next adjuster open retries a
+  review still pending after a grace period.
+- FR-10.9 At most one review is in flight per claim, with a cooldown before a ready review can be
+  refreshed again; a concurrent request joins the running one.
+
 ## 4. Non-functional requirements
 - **Security:** owner cookie per claim session, origin checks, input size caps, per-message-type rate limits,
   session TTL, max live connection duration.
@@ -126,3 +154,4 @@ incident sketches (optional stretch goal).
 | M5 | Camera evidence | Frame capture, independent verification, evidence storage |
 | M6 | Persistence + dashboard | DB models, adjuster queue, detail view, routing override |
 | M7 | Hardening | Security limits, observability, Docker, CI, README with demo GIF + metrics |
+| M8 | Policy review | Policy wordings, review service with code-checked quotes, storage, adjuster panel + packet section, eval metrics |
