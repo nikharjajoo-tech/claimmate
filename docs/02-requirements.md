@@ -99,10 +99,11 @@ Design decisions behind these requirements are in [07-policy-review.md](07-polic
   Submission never waits for the model and never fails because of it.
 - FR-10.3 The review contains a summary, relevant clauses (section, exact quote, reason), points to
   check, and claimant questions (exact quote, turn ID).
-- FR-10.4 Code rejects any clause whose quote is not word for word in the cited section, and any
-  question whose quote is not in the cited claimant turn; rejects are dropped and logged. Quotes are
-  compared after normalizing whitespace, quote characters, dashes and case, and must be at least
-  25 characters after normalization.
+- FR-10.4 The model never writes a quote. It cites a clause and anchors a sentence within it; code
+  reads the quote out of the wording file, and a claimant question out of the transcript, so
+  displayed text is always the source's own. An anchor that matches nothing in the cited source is
+  dropped and logged. Anchors are compared after normalizing whitespace, quote characters, dashes
+  and case, and must be at least 20 characters (8 for a question, whose source is one short turn).
 - FR-10.5 The review never states a coverage decision or amount; verdict language in the summary is
   replaced by a code-built summary.
 - FR-10.6 Only signed-in adjusters can read it. The review is merged in at the adjuster call sites

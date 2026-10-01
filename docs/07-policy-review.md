@@ -85,9 +85,10 @@ flowchart LR
    needed at this size. It uses the pipeline's existing provider chain (Groq gpt-oss-120b, Gemini
    fallback) with a strict JSON schema. The schema has **no field for a coverage verdict or amount**.
 3. **Code checks every item**, the same way only verified captures count as received evidence:
-   - a clause must name a real section, and its quote must appear **word for word** in that section,
-     compared after the normalization in §9.4
-   - a claimant question must point to a real claimant turn, and its quote must appear in that turn
+   - a clause must name a real section, and its anchor must land on a sentence in that section;
+     the quote shown is then read out of the wording itself (§9.4)
+   - a claimant question must point to a real claimant turn, and its anchor must land in that turn;
+     the quote shown is read out of the transcript
    - the summary is scanned for verdict language ("is covered", "will be paid", "approved",
      "denied", …); if found, a plain summary built by code replaces it
 
@@ -107,7 +108,7 @@ flowchart LR
 | FR-10.1 | Five fictional policy wordings with numbered sections (coverage, exclusions, conditions, claims). Every `PolicyRecord` carries a `product` key that selects one wording; wordings are versioned (§9.1). |
 | FR-10.2 | A policy review is generated when a claim is submitted, and again when the adjuster asks. Submission never blocks on the model, and never fails because of it. |
 | FR-10.3 | The review contains a summary, relevant clauses (section, exact quote, reason), points to check, and claimant questions (exact quote, turn ID). |
-| FR-10.4 | Code rejects any clause whose quote is not in the cited section, and any question whose quote is not in the cited claimant turn, comparing under the normalization and minimum quote length in §9.4. |
+| FR-10.4 | The model never writes a quote: it cites a section and anchors a sentence, and code reads the quote out of the wording (and a question out of the transcript). An anchor that matches nothing in the cited source is dropped and recorded. See §9.4. |
 | FR-10.5 | The review never states a coverage decision or amount; verdict language in the summary is replaced. |
 | FR-10.6 | Only signed-in adjusters can read it. The review is added at the adjuster call sites only, never in `session_view` or `build_packet_zip`, and tests assert that the claimant claim endpoint and the claimant packet ZIP contain no part of it (§9.2). |
 | FR-10.7 | Reviews are stored with the claim (new table, Alembic migration) with status, model, prompt version, wording id and version, the pipeline revision they read, and time; every generation writes an audit event and a usage row the operations panel counts (§9.7). |
@@ -143,7 +144,7 @@ runs **on its own day**, as a subset run over the labelled scenarios (`python -m
 | Step | Work |
 |---|---|
 | 1 | `product` key on `PolicyRecord` and all 13 seed records; write the five policy wordings, versioned; wording loader + tests |
-| 2 | Policy review service: prompt, schema, quote normalization and checks, verdict-language guard; unit tests with a fake model |
+| 2 | Policy review service: prompt, schema, anchor-and-extract quoting (§9.4), verdict-language guard; unit tests with a fake model |
 | 3 | Storage (migration 4) with review status, background generation on submission, lazy retry on adjuster open, Refresh endpoint with the in-flight guard, audit + usage events |
 | 4 | Adjuster panel with question-to-transcript highlighting; packet section; isolation tests proving the claimant endpoints never expose it |
 | 5 | Eval: optional review labels on `Expected` (`backend/app/eval/scenario.py:51`), a second scoring path in `run_eval`/`compute_metrics` for the review service (today they score pipeline output only), labels on ~15 scenarios, new metrics, one subset run on a fresh quota day |
@@ -211,20 +212,39 @@ attach work to. So:
 3. A generation that fails writes status `failed` with the error, which is what the panel's Retry
    button acts on. The claim's submission is never rolled back or delayed by any of this.
 
-### 9.4 What "word for word" means (FR-10.4)
+### 9.4 The model points, code quotes (FR-10.4)
 
-Exact substring matching would drop legitimate clauses, because models routinely change whitespace,
-quote characters and casing, and that would put clause recall below the 85% target for the wrong
-reason. Both the wording section and the model's quote are normalized before comparison:
+The draft spec had the model write each quote and code check it afterwards. That makes a fabricated
+quote unlikely but never impossible, and it turns the check's threshold into a safety control that
+has to be argued about: measured over the five wordings, a 25-character quote is still text that
+appears in another clause of the same document 3.0% of the time, while raising the bar to 40
+characters to get that to 0.2% starts throwing away honest short quotes.
 
-- collapse every run of whitespace (including newlines) to one space, and trim
-- curly quotes and apostrophes to straight ones, en/em dashes to `-`, `…` to `...`
-- casefold
+The model therefore does not write quotes at all. It returns the clause number and an **anchor**:
+the opening words of the sentence it means. Code finds that sentence inside the cited clause and
+shows **the wording file's own text**. This is the move the project already makes with evidence,
+where the LLM cannot mark a capture `received` because the capability is absent rather than audited
+(PRD 7.2).
 
-A quote must be **at least 25 characters after normalization** to count, so a three-word fragment
-cannot match by accident. A quote that spans a line break in the wording matches, because newlines
-are collapsed first. Quotes are stored as the model wrote them and displayed that way; normalization
-is only for the check.
+What changes:
+
+- A quote an adjuster reads is the policy's text by construction. Invented wording cannot be
+  displayed, whatever the anchor says.
+- A near miss now helps instead of costing a clause. An anchor of "plan pays its share" where the
+  policy says "plan has paid its share" used to fail the substring check and lose the clause
+  entirely; now the anchor still lands on the sentence and the adjuster reads the correct text.
+- The haystack shrinks from the whole document (33,000 characters) to one clause (280 characters,
+  median), so the anchor floor is **20 characters**, where only 0.38% of sentence openings are
+  ambiguous within their own clause. The floor is now a precision aid, not a safety control: a
+  vague anchor at worst shows a different real sentence from the correct clause.
+- Claimant questions work the same way, with the transcript as the source and an 8-character floor,
+  because turns are short and real questions are short ("am I covered?").
+
+Comparison is still done on normalized text (whitespace collapsed, curly quotes and dashes
+straightened, casefolded), because the wording wraps its lines at the margin. An anchor may pull at
+most two sentences, so a point that straddles a sentence break still works.
+
+Anchors that match nothing are dropped and recorded as before.
 
 ### 9.5 Refresh limits (FR-10.9)
 
