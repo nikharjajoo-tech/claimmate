@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.config import Settings
 from app.services import lifecycle
 from app.services.packet_zip import build_packet_zip
+from app.services.review_runner import review_state_view
 from app.services.store import SessionStore
 from app.services.view import session_view
 from app.storage.repository import operations_metrics
@@ -120,7 +121,20 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
     async def detail(claim_id: str) -> dict[str, Any]:
         session = await store.get_for_adjuster(claim_id)
         state = session_view(session, evidence_url_prefix=f"/api/adjuster/claims/{claim_id}/evidence")
-        return {"id": claim_id, "state": state, "audit": await store.repo.audit_log(claim_id)}
+        # The wording review is merged in HERE, never inside session_view: that builder also serves
+        # the claimant's own GET /api/claims/{id} (decision D14a, FR-10.6).
+        return {
+            "id": claim_id,
+            "state": state,
+            "audit": await store.repo.audit_log(claim_id),
+            "wording_review": await wording_review(claim_id),
+        }
+
+    async def wording_review(claim_id: str) -> dict[str, Any]:
+        runner = store.reviews
+        if runner is None:
+            return {"status": "disabled", "review": None, "error": "", "runs": 0}
+        return review_state_view(await store.repo.load_review(claim_id), running=runner.in_flight(claim_id))
 
     @router.get("/claims/{claim_id}", dependencies=[Depends(require_adjuster)])
     async def get_claim(claim_id: str) -> dict[str, Any]:
@@ -133,6 +147,8 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
         if session.status == "submitted":
             lifecycle.transition(session, "in_review", actor="adjuster")
             await store.save(session)
+        if store.reviews is not None:  # start a missing review, or retry one a restart stranded
+            await store.reviews.ensure(session)
         return await detail(claim_id)
 
     @router.post("/claims/{claim_id}/status", dependencies=[Depends(require_adjuster)])
@@ -158,6 +174,26 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
         if image is None:
             raise HTTPException(404, "No such evidence.")
         return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+    @router.post("/claims/{claim_id}/wording-review/refresh", dependencies=[Depends(require_adjuster)])
+    async def refresh_wording_review(claim_id: str) -> dict[str, Any]:
+        """Re-read the policy, for example once new documents arrive (FR-10.2).
+
+        One generation per claim at a time, and not again straight away: refreshing is for new
+        evidence, not for re-rolling the model (FR-10.9).
+        """
+        session = await store.get_for_adjuster(claim_id)
+        runner = store.reviews
+        if runner is None:
+            raise HTTPException(503, "Wording review is not configured on the server.")
+        if session.status == "intake":
+            raise HTTPException(409, "The claim is still being taken. A wording review runs once it is submitted.")
+        if not await runner.refresh(session):
+            wait = runner.cooling_down(claim_id)
+            if runner.in_flight(claim_id):
+                raise HTTPException(409, "A wording review is already running for this claim.")
+            raise HTTPException(429, f"This review was just generated. Try again in {wait:.0f}s.")
+        return await wording_review(claim_id)
 
     @router.get("/claims/{claim_id}/packet.zip", dependencies=[Depends(require_adjuster)])
     async def packet(claim_id: str) -> Response:

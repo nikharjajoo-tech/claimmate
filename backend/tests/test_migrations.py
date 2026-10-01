@@ -15,7 +15,8 @@ from app.storage.models import Base
 from tests.dbutil import REMOTE_URL
 
 BACKEND = Path(__file__).resolve().parents[1]
-APP_TABLES = {"claims", "turns", "evidence_captures", "findings", "audit_events", "pipeline_runs", "voice_latency"}
+APP_TABLES = {"claims", "turns", "evidence_captures", "findings", "audit_events", "pipeline_runs", "voice_latency",
+              "wording_reviews"}
 
 
 async def _inspect(url: str) -> tuple[list, set[str]]:

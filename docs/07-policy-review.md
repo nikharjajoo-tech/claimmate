@@ -1,9 +1,18 @@
-# Policy Review for Adjusters
+# Policy Wording Review for Adjusters
 
 > **Status: APPROVED (2026-09-29).** Recorded in the [PRD](00-PRD.md) as feature F13, decision
 > D14 (a-f) and milestone M8, and in [02-requirements.md](02-requirements.md) as FR-10. Nothing is
 > built yet; the build starts at step 1 of §7. §9 holds the code-level design decisions taken after
 > reading the current code, and the build follows them.
+
+## 0. A note on the name
+
+The adjuster-facing panel is called **Wording review**, not "policy review", because
+`policy_review` is already one of the five routes (rule `POLICY-001`: policy not found, lapsed,
+outside its period, or a name mismatch). A claim can be routed "policy review" *and* carry a wording
+review, and the two mean different things. The route keeps its name, since it is written into
+`rules.yaml`, the `Route` enum, the eval labels, and every stored claim; the panel, the API path
+(`/wording-review`) and the LLM step name (`wording_review`) use the new one.
 
 ## 1. The idea in one paragraph
 
@@ -30,11 +39,11 @@ The adjuster decides. ClaimMate does not say whether the claim is covered or how
 
 ## 3. What the adjuster sees
 
-A new **Policy review** panel on the claim detail page, and a matching section in the downloadable
+A new **Wording review** panel on the claim detail page, and a matching section in the downloadable
 packet. Example for the demo claim (Grace Liu, MD-4418):
 
 ```
-┌ Policy review ─────────────────────────── AI-assisted · verify against the policy ┐
+┌ Wording review ────────────────────────── AI-assisted · verify against the policy ┐
 │ Summary                                                                           │
 │ Grace Liu asks to be reimbursed $640 she paid for an urgent care visit on         │
 │ 2026-09-14 for sinusitis, after her primary health plan paid its share. The        │

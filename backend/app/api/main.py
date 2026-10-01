@@ -33,6 +33,7 @@ from app.services.evidence import capture_summary, verify_and_record
 from app.api.adjuster import adjuster_router
 from app.api.security import RateLimiter, SecurityMiddleware
 from app.services.packet_zip import build_packet_zip
+from app.services.review_runner import ReviewRunner
 from app.services.sessions import ClaimService, SessionError
 from app.services.store import SessionStore
 from app.storage.db import make_engine, make_sessionmaker
@@ -92,9 +93,11 @@ def create_app(
     engine = None
     if store is None:  # production wiring: SQLite (or any SQLAlchemy URL) plus evidence files on disk
         engine = make_engine(settings.database_url, turso_auth_token=settings.turso_auth_token)
-        store = SessionStore(ClaimRepository(
+        repo = ClaimRepository(
             make_sessionmaker(engine), settings.evidence_dir, images_in_database=settings.evidence_in_database
-        ))
+        )
+        # The wording review uses the pipeline's provider chain, built on first use like the pipeline.
+        store = SessionStore(repo, ReviewRunner(repo, lambda: make_pipeline_llm(settings)))
     service = service or ClaimService(lazy_pipeline_runner(settings))
     live_connect = live_connect or gemini_connect_factory(settings)
     allowed_origins = [o.strip() for o in os.getenv("CLAIMVOICE_ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",") if o.strip()]
@@ -118,6 +121,8 @@ def create_app(
             sweeper.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await sweeper
+            if store.reviews is not None:
+                await store.reviews.drain()  # let in-flight wording reviews finish writing
             if engine is not None:
                 await engine.dispose()
 

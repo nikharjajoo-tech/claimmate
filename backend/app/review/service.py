@@ -19,7 +19,7 @@ from app.review.prompts import DEFAULT_PROMPT_VERSION, review_prompt, review_sys
 
 logger = logging.getLogger(__name__)
 
-REVIEW_STEP = "policy_review"
+REVIEW_STEP = "wording_review"  # distinct from the policy_review route (POLICY-001)
 
 
 def wording_for_policy(policy: PolicyLookup) -> PolicyWording | None:

@@ -20,14 +20,16 @@ from app.services.sessions import (
     ClaimSession,
     SessionError,
 )
+from app.services.review_runner import ReviewRunner
 from app.storage.repository import ClaimRepository
 
 logger = logging.getLogger(__name__)
 
 
 class SessionStore:
-    def __init__(self, repo: ClaimRepository | None = None) -> None:
+    def __init__(self, repo: ClaimRepository | None = None, reviews: ReviewRunner | None = None) -> None:
         self.repo = repo
+        self.reviews = reviews  # wording reviews, generated in the background after submission
         self._sessions: dict[str, ClaimSession] = {}
 
     async def save(self, session: ClaimSession) -> None:
@@ -82,6 +84,8 @@ class SessionStore:
         if session.has_claimant_speech or session.captures:
             lifecycle.submit(session, reason)
             await self.save(session)
+            if self.reviews is not None:  # one wording review per claim, in the background (FR-10.2)
+                self.reviews.schedule(session)
             self._sessions.pop(session.id, None)
         else:
             await self.delete(session)

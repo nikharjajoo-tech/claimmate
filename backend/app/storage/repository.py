@@ -22,7 +22,17 @@ from app.domain.models import EvidenceCapture, Route, is_blank
 from app.pipeline.graph import PipelineResult
 from app.pipeline.prompts import Turn
 from app.services.sessions import ClaimSession
-from app.storage.models import AuditRow, ClaimRow, EvidenceRow, FindingRow, PipelineRunRow, TurnRow, VoiceLatencyRow
+from app.review.models import PolicyReview
+from app.storage.models import (
+    AuditRow,
+    ClaimRow,
+    EvidenceRow,
+    FindingRow,
+    PipelineRunRow,
+    TurnRow,
+    VoiceLatencyRow,
+    WordingReviewRow,
+)
 
 ROUTE_ORDER = {route.value: i for i, route in enumerate(Route)}
 ACTOR_FOR_SOURCE = {"agent": "agent", "claimant": "claimant", "upload": "claimant"}
@@ -128,11 +138,76 @@ class ClaimRepository:
 
     async def delete(self, claim_id: str) -> None:
         async with self._sessionmaker() as db, db.begin():
-            for table in (AuditRow, PipelineRunRow, FindingRow, EvidenceRow, TurnRow, VoiceLatencyRow):
+            for table in (AuditRow, PipelineRunRow, FindingRow, EvidenceRow, TurnRow, VoiceLatencyRow,
+                          WordingReviewRow):
                 await db.execute(delete(table).where(table.claim_id == claim_id))
             await db.execute(delete(ClaimRow).where(ClaimRow.id == claim_id))
         await asyncio.to_thread(shutil.rmtree, self.evidence_dir / claim_id, True)
         self._locks.pop(claim_id, None)
+
+    # --- wording review (F13) ------------------------------------------------
+
+    async def review_begin(self, claim_id: str, *, pipeline_revision: int | None, prompt_version: str) -> None:
+        """Mark a review as being generated. Written before the model call, so a crash leaves a
+        pending row the next adjuster open can retry rather than silence."""
+        now = datetime.now(UTC)
+        async with self._lock(claim_id), self._sessionmaker() as db, db.begin():
+            row = await db.get(WordingReviewRow, claim_id)
+            if row is None:
+                row = WordingReviewRow(claim_id=claim_id)
+                db.add(row)
+            row.status, row.error = "pending", ""
+            row.pipeline_revision, row.prompt_version = pipeline_revision, prompt_version
+            row.started_at = row.updated_at = now
+
+    async def review_finish(self, claim_id: str, review: PolicyReview) -> None:
+        tokens_in, tokens_out = review.tokens
+        detail = (
+            f"{review.wording_ref or 'no wording'}, {review.model or 'unknown model'}: "
+            f"{len(review.clauses)} clause(s), {len(review.questions)} question(s), "
+            f"{len(review.dropped)} dropped"
+            + (", summary replaced" if review.summary_replaced else "")
+        )
+        async with self._lock(claim_id), self._sessionmaker() as db, db.begin():
+            row = await db.get(WordingReviewRow, claim_id)
+            if row is None:  # the claim was refreshed away mid-flight; nothing to attach it to
+                return
+            row.status, row.error = "ready", ""
+            row.review_json = review.model_dump_json()
+            row.wording_ref, row.model = review.wording_ref, review.model
+            row.prompt_version, row.pipeline_revision = review.prompt_version, review.pipeline_revision
+            row.runs += 1
+            row.tokens_in += tokens_in
+            row.tokens_out += tokens_out
+            row.latency_ms = review.llm_call.latency_ms if review.llm_call else 0
+            row.updated_at = datetime.now(UTC)
+            db.add(AuditRow(claim_id=claim_id, actor="system", action="wording_review", detail=detail[:2000]))
+
+    async def review_fail(self, claim_id: str, error: str) -> None:
+        async with self._lock(claim_id), self._sessionmaker() as db, db.begin():
+            row = await db.get(WordingReviewRow, claim_id)
+            if row is None:
+                return
+            row.status, row.error = "failed", error[:500]
+            row.runs += 1
+            row.updated_at = datetime.now(UTC)
+            db.add(AuditRow(claim_id=claim_id, actor="system", action="wording_review_failed", detail=error[:2000]))
+
+    async def load_review(self, claim_id: str) -> dict[str, Any] | None:
+        """The claim's review as the adjuster API returns it, or None if one was never started."""
+        async with self._sessionmaker() as db:
+            row = await db.get(WordingReviewRow, claim_id)
+        if row is None:
+            return None
+        review = PolicyReview.model_validate_json(row.review_json) if row.review_json else None
+        return {
+            "status": row.status,
+            "review": review,
+            "runs": row.runs,
+            "error": row.error,
+            "started_at": _aware(row.started_at),
+            "updated_at": _aware(row.updated_at),
+        }
 
     async def record_voice_latency(self, claim_id: str, first_audio_ms: int, turn_kind: str) -> None:
         async with self._sessionmaker() as db, db.begin():
@@ -236,6 +311,9 @@ async def operations_metrics(repo: ClaimRepository) -> dict[str, Any]:
         runs = (await db.execute(select(PipelineRunRow.latency_ms, PipelineRunRow.tokens_in,
                                         PipelineRunRow.tokens_out, PipelineRunRow.models))).all()
         voice = await _column(db, VoiceLatencyRow.first_audio_ms)
+        reviews = (await db.execute(select(WordingReviewRow.status, WordingReviewRow.runs,
+                                           WordingReviewRow.tokens_in, WordingReviewRow.tokens_out,
+                                           WordingReviewRow.latency_ms))).all()
     by_status: dict[str, int] = {}
     by_route: dict[str, int] = {}
     for status, pipeline_route, frozen, override in claims:
@@ -267,6 +345,16 @@ async def operations_metrics(repo: ClaimRepository) -> dict[str, Any]:
         "review": {
             "reviewed": reviewed,
             "overridden": sum(1 for c in claims if c.route_override),
+        },
+        # The wording review (F13) is a separate LLM call from the pipeline, so it is counted
+        # separately: mixing it into "pipeline" would quietly inflate per-turn cost and latency.
+        "wording_review": {
+            "claims": len(reviews),
+            "by_status": {s: sum(1 for r in reviews if r.status == s) for s in {r.status for r in reviews}},
+            "generations": sum(r.runs for r in reviews),
+            "latency_p50_ms": percentile([r.latency_ms for r in reviews if r.latency_ms], 50),
+            "tokens_in": sum(r.tokens_in for r in reviews),
+            "tokens_out": sum(r.tokens_out for r in reviews),
         },
     }
 

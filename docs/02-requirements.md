@@ -90,7 +90,7 @@ The conversation never blocks waiting for a tool.
 - FR-9.2 Per-claim metrics: tool latencies, pipeline duration, tokens and estimated cost.
 - FR-9.3 PII redaction (phone, email) in logs.
 
-### FR-10 Policy review for adjusters (F13, PRD D14)
+### FR-10 Wording review for adjusters (F13, PRD D14)
 Design decisions behind these requirements are in [07-policy-review.md](07-policy-review.md) §9.
 - FR-10.1 Five fictional policy wordings with numbered sections (coverage, exclusions, conditions,
   claims), one per product. Every policy record carries a `product` key that selects one wording,
@@ -155,4 +155,4 @@ incident sketches (optional stretch goal).
 | M5 | Camera evidence | Frame capture, independent verification, evidence storage |
 | M6 | Persistence + dashboard | DB models, adjuster queue, detail view, routing override |
 | M7 | Hardening | Security limits, observability, Docker, CI, README with demo GIF + metrics |
-| M8 | Policy review | Policy wordings, review service with code-checked quotes, storage, adjuster panel + packet section, eval metrics |
+| M8 | Wording review | Policy wordings, review service with code-checked quotes, storage, adjuster panel + packet section, eval metrics |
