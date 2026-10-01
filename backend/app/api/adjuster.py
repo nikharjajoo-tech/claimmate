@@ -200,8 +200,10 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
         session = await store.get_for_adjuster(claim_id)
         if session.result is None:
             raise HTTPException(409, "No claim packet yet.")
+        state = await store.repo.load_review(claim_id) if store.reviews is not None else None
+        review = state["review"] if state and state["status"] == "ready" else None
         return Response(
-            build_packet_zip(session), media_type="application/zip",
+            build_packet_zip(session, wording_review=review), media_type="application/zip",
             headers={"Content-Disposition": f'attachment; filename="claim-{claim_id[:8]}.zip"'},
         )
 

@@ -13,7 +13,7 @@ export function OperationsPanel({ onUnauthorized }: { onUnauthorized: (e: unknow
   }, [onUnauthorized]);
 
   if (!metrics) return <section className="panel">{error || "Loading metrics…"}</section>;
-  const { claims, pipeline, voice, review } = metrics;
+  const { claims, pipeline, voice, review, wording_review } = metrics;
   const voiceMet = voice.first_audio_p50_ms !== null && voice.first_audio_p50_ms <= voice.target_p50_ms;
 
   return (
@@ -53,6 +53,15 @@ export function OperationsPanel({ onUnauthorized }: { onUnauthorized: (e: unknow
           <span className="metric-value">{(pipeline.tokens_in + pipeline.tokens_out).toLocaleString()}</span>
           <span className="metric-note">
             {pipeline.tokens_in.toLocaleString()} in · {pipeline.tokens_out.toLocaleString()} out
+          </span>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Wording reviews</span>
+          <span className="metric-value">{wording_review.generations}</span>
+          <span className="metric-note">
+            {wording_review.claims} claim{wording_review.claims === 1 ? "" : "s"} · {formatMs(wording_review.latency_p50_ms)} p50 ·{" "}
+            {(wording_review.tokens_in + wording_review.tokens_out).toLocaleString()} tokens
+            {wording_review.by_status.failed ? ` · ${wording_review.by_status.failed} failed` : ""}
           </span>
         </div>
         <div className="metric">

@@ -265,6 +265,28 @@ button, input, select, textarea { font-family: inherit; }
 .actor-agent { color: var(--warn); }
 .actor-system, .actor-claimant { color: var(--muted); }
 
+/* ---- wording review (F13): adjuster-only, quoted from the policy file ---- */
+.wording-review { background: var(--surface-2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+.wording-review header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.wording-review h3 { margin: 0; }
+.wording-review h4 { margin: 14px 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wording-review header .btn-small { margin-left: auto; }
+.wording-review p { font-size: 0.92rem; margin: 0; }
+.caveat { font-size: 0.75rem; font-weight: 500; padding: 3px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); cursor: help; }
+.source-line { font-size: 0.8rem !important; margin-bottom: 8px !important; }
+.small { font-size: 0.8rem; }
+
+.clauses { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.clauses li { border-left: 3px solid var(--accent); padding-left: 12px; }
+.clause-label { font-weight: 600; font-size: 0.88rem; }
+.clauses blockquote { margin: 4px 0; font-size: 0.88rem; color: var(--ink); background: var(--panel); border-radius: 8px; padding: 8px 10px; }
+.clauses .why { font-size: 0.85rem; color: var(--muted); }
+
+.questions { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.questions li { font-size: 0.9rem; padding: 8px 10px; border-radius: 8px; background: var(--panel); cursor: pointer; border: 1px solid transparent; }
+.questions li:hover { border-color: var(--outline); }
+.questions li.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
 /* ---- adjuster operations ---- */
 .operations h2 { margin-bottom: 4px; }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }

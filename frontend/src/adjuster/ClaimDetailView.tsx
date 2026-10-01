@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ROUTE_LABEL, title } from "../components/Notebook";
 import { adjusterApi, type ClaimDetail, HttpError } from "../lib/adjuster";
+import { WordingReviewPanel } from "./WordingReviewPanel";
 import type { ClaimStatus, Route } from "../lib/types";
 
 interface Props {
@@ -32,6 +33,8 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
   const [overrideRoute, setOverrideRoute] = useState<Route>("needs_docs");
   const [reason, setReason] = useState("");
   const [highlight, setHighlight] = useState<string | null>(null);
+  // A question from the wording review highlights its turn directly, by turn id.
+  const [questionTurn, setQuestionTurn] = useState<string | null>(null);
 
   useEffect(() => {
     adjusterApi.detail(claimId).then(setDetail, (e) => {
@@ -64,6 +67,7 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
   const { state, audit } = detail;
   const name = state.fields.find((f) => f.key === "policyholder_name")?.value ?? "Unknown claimant";
   const sourceTurns = new Set(highlight ? (state.fact_sources[highlight] ?? []) : []);
+  if (questionTurn) sourceTurns.add(questionTurn);
   const reviewable = state.status === "in_review" || state.status === "awaiting_docs";
 
   return (
@@ -172,8 +176,15 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
                 className={`${f.value ? "filled" : "missing"}${highlight === f.key ? " active" : ""}`}
                 role={state.fact_sources[f.key] ? "button" : undefined}
                 tabIndex={state.fact_sources[f.key] ? 0 : undefined}
-                onClick={() => setHighlight(highlight === f.key ? null : f.key)}
-                onKeyDown={(e) => e.key === "Enter" && setHighlight(highlight === f.key ? null : f.key)}
+                onClick={() => {
+                  setQuestionTurn(null);
+                  setHighlight(highlight === f.key ? null : f.key);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  setQuestionTurn(null);
+                  setHighlight(highlight === f.key ? null : f.key);
+                }}
               >
                 <dt>{f.label}</dt>
                 <dd>{f.value ?? "Not provided"}</dd>
@@ -247,6 +258,18 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
         </div>
 
         <div>
+          <WordingReviewPanel
+            claimId={claimId}
+            // A server mid-deploy may not send it yet; the panel must not take the page down.
+            state={detail.wording_review ?? { status: "none", review: null, error: "", runs: 0 }}
+            activeTurn={questionTurn}
+            onShowTurn={(turnId) => {
+              setHighlight(null);
+              setQuestionTurn(turnId);
+            }}
+            onUnauthorized={onUnauthorized}
+          />
+
           <h3>Transcript</h3>
           <ol className="transcript review-transcript">
             {state.transcript.map((t) => (

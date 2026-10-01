@@ -1,16 +1,26 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClaimDetail } from "../lib/adjuster";
+import type { ClaimDetail, WordingReviewState } from "../lib/adjuster";
+import { REVIEW } from "./fixtures";
 import type { ClaimStatus, ClaimView } from "../lib/types";
 import { ClaimDetailView } from "./ClaimDetailView";
 
 const detail = vi.fn();
+const refresh = vi.fn();
 vi.mock("../lib/adjuster", async (original) => ({
   ...(await original<typeof import("../lib/adjuster")>()),
-  adjusterApi: { detail: (...args: unknown[]) => detail(...args), packetUrl: (id: string) => `/zip/${id}` },
+  adjusterApi: {
+    detail: (...args: unknown[]) => detail(...args),
+    packetUrl: (id: string) => `/zip/${id}`,
+    refreshWordingReview: (...args: unknown[]) => refresh(...args),
+  },
 }));
 
-function claim(status: ClaimStatus, overrides: Partial<ClaimView> = {}): ClaimDetail {
+function claim(
+  status: ClaimStatus,
+  overrides: Partial<ClaimView> = {},
+  wording: WordingReviewState = { status: "ready", review: REVIEW, error: "", runs: 1 },
+): ClaimDetail {
   const state = {
     id: "abcdef123456", revision: 2, up_to_date: true, processing: false, live_connected: false, error: "",
     transcript: [
@@ -25,13 +35,21 @@ function claim(status: ClaimStatus, overrides: Partial<ClaimView> = {}): ClaimDe
     safety: [], checklist: [], findings: [], policy: null, next_question: "", packet_markdown: "# Claim",
     ...overrides,
   } as ClaimView;
-  return { id: state.id, state, audit: [{ at: "2026-09-25T12:00:00Z", actor: "system", action: "claim_created", detail: "Intake started." }] };
+  return {
+    id: state.id,
+    state,
+    audit: [{ at: "2026-09-25T12:00:00Z", actor: "system", action: "claim_created", detail: "Intake started." }],
+    wording_review: wording,
+  };
 }
 
 const noop = () => undefined;
 
 describe("ClaimDetailView", () => {
-  beforeEach(() => detail.mockReset());
+  beforeEach(() => {
+    detail.mockReset();
+    refresh.mockReset();
+  });
 
   it("offers review actions only when the claim is in review", async () => {
     detail.mockResolvedValue(claim("in_review"));
@@ -62,6 +80,29 @@ describe("ClaimDetailView", () => {
     expect(turn).not.toHaveClass("source");
     fireEvent.click(screen.getByText("Elena Brooks", { selector: "dd" }));
     expect(turn).toHaveClass("source");
+  });
+
+  it("highlights the transcript turn a claimant question was asked in", async () => {
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    const turn = (await screen.findByText("I'm Elena Brooks.")).closest("li")!;
+    expect(turn).not.toHaveClass("source");
+
+    fireEvent.click(screen.getByRole("button", { name: /I'm Elena Brooks/ }));
+    expect(turn).toHaveClass("source");
+  });
+
+  it("clears a fact highlight when a question is selected, and the other way round", async () => {
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    await screen.findByText("Transcript");
+
+    fireEvent.click(screen.getByText("Elena Brooks", { selector: "dd" }));
+    const factRow = screen.getByText("Elena Brooks", { selector: "dd" }).closest("div")!;
+    expect(factRow).toHaveClass("active");
+
+    fireEvent.click(screen.getByRole("button", { name: /I'm Elena Brooks/ }));
+    expect(factRow).not.toHaveClass("active");
   });
 
   it("explains an override", async () => {

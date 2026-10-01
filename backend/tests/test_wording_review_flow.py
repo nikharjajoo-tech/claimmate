@@ -335,3 +335,37 @@ def test_without_a_runner_the_panel_says_so_instead_of_failing(tmp_path):
     client = signed_in(app)
     assert client.get(f"/api/adjuster/claims/{claim_id}").json()["wording_review"]["status"] == "disabled"
     assert client.post(f"/api/adjuster/claims/{claim_id}/wording-review/refresh").status_code == 503
+
+
+# --- the packet section (FR-10.6) --------------------------------------------
+
+
+def test_the_adjuster_packet_carries_the_review_and_the_claimant_packet_does_not(tmp_path):
+    import io
+    import zipfile
+
+    app, store, llm = build(tmp_path)
+    claim_id = file_claim(app)
+
+    with adjuster_session(app) as client:
+        packet = client.get(f"/api/adjuster/claims/{claim_id}/packet.zip")
+    assert packet.status_code == 200
+    archive = zipfile.ZipFile(io.BytesIO(packet.content))
+    assert "wording-review.md" in archive.namelist()
+    markdown = archive.read("wording-review.md").decode()
+    assert "# Wording review" in markdown
+    assert "AI-assisted" in markdown and "not a coverage decision" in markdown
+    assert "We cover sudden and accidental" in markdown  # the policy's own sentence
+    assert "homeowners/v1" in markdown
+
+
+def test_a_failed_review_leaves_the_packet_buildable(tmp_path):
+    import io
+    import zipfile
+
+    app, store, llm = build(tmp_path, review_llm=ScriptedLLM(fail=True))
+    claim_id = file_claim(app)
+    with adjuster_session(app) as client:
+        packet = client.get(f"/api/adjuster/claims/{claim_id}/packet.zip")
+    assert packet.status_code == 200
+    assert "wording-review.md" not in zipfile.ZipFile(io.BytesIO(packet.content)).namelist()

@@ -1,4 +1,9 @@
-"""Downloadable claim packet: the adjuster packet, transcript, evidence manifest, and photos."""
+"""Downloadable claim packet: the adjuster packet, transcript, evidence manifest, and photos.
+
+This builder serves the claimant's own download as well as the adjuster's, so anything
+adjuster-only has to be passed in by the caller rather than read from the session here
+(decision D14a, FR-10.6). `wording_review` is the only such argument today.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +11,12 @@ import io
 import json
 import zipfile
 
+from app.review.models import PolicyReview
+from app.review.render import review_markdown
 from app.services.sessions import ClaimSession
 
 
-def build_packet_zip(session: ClaimSession) -> bytes:
+def build_packet_zip(session: ClaimSession, *, wording_review: PolicyReview | None = None) -> bytes:
     if session.result is None:
         raise ValueError("No claim packet yet.")
     decision = [
@@ -39,6 +46,8 @@ def build_packet_zip(session: ClaimSession) -> bytes:
         archive.writestr("claim.md", session.result.packet.markdown + "\n".join(decision) + "\n")
         archive.writestr("transcript.md", f"# Transcript\n\n{transcript}")
         archive.writestr("evidence.json", json.dumps(manifest, indent=2))
+        if wording_review is not None:  # adjuster packets only
+            archive.writestr("wording-review.md", review_markdown(wording_review))
         for capture in session.captures:
             image = session.evidence_images.get(capture.capture_id)
             if image:

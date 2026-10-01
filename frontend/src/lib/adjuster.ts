@@ -1,9 +1,50 @@
 import type { AuditEntry, ClaimStatus, ClaimView, QueueItem, Route } from "./types";
 
+export interface ReviewClause {
+  section: string;
+  heading: string;
+  part: string;
+  quote: string;
+  anchor: string;
+  why_it_matters: string;
+}
+
+export interface ReviewQuestion {
+  turn_id: string;
+  quote: string;
+}
+
+export interface WordingReview {
+  wording_ref: string;
+  policy_number: string;
+  policy_status: string;
+  summary: string;
+  summary_replaced: boolean;
+  clauses: ReviewClause[];
+  points_to_check: string[];
+  questions: ReviewQuestion[];
+  dropped: { kind: string; reason: string; detail: string }[];
+  prompt_version: string;
+  pipeline_revision: number | null;
+  generated_at: string;
+}
+
+/** "none" = never started, "running" = generating now, "pending" = stranded, retried on open. */
+export type WordingReviewStatus = "none" | "running" | "pending" | "ready" | "failed" | "disabled";
+
+export interface WordingReviewState {
+  status: WordingReviewStatus;
+  review: WordingReview | null;
+  error: string;
+  runs: number;
+  updated_at?: string;
+}
+
 export interface ClaimDetail {
   id: string;
   state: ClaimView;
   audit: AuditEntry[];
+  wording_review: WordingReviewState;
 }
 
 export interface OperationsMetrics {
@@ -18,6 +59,14 @@ export interface OperationsMetrics {
   };
   voice: { turns: number; first_audio_p50_ms: number | null; first_audio_p95_ms: number | null; target_p50_ms: number };
   review: { reviewed: number; overridden: number };
+  wording_review: {
+    claims: number;
+    by_status: Record<string, number>;
+    generations: number;
+    latency_p50_ms: number | null;
+    tokens_in: number;
+    tokens_out: number;
+  };
 }
 
 export class HttpError extends Error {
@@ -67,6 +116,7 @@ export const adjusterApi = {
   open: (id: string) => post<ClaimDetail>(`/claims/${id}/open`),
   setStatus: (id: string, status: ClaimStatus, note: string) => post<ClaimDetail>(`/claims/${id}/status`, { status, note }),
   override: (id: string, route: Route, reason: string) => post<ClaimDetail>(`/claims/${id}/override`, { route, reason }),
+  refreshWordingReview: (id: string) => post<WordingReviewState>(`/claims/${id}/wording-review/refresh`),
   packetUrl: (id: string) => `/api/adjuster/claims/${id}/packet.zip`,
   metrics: () => call<OperationsMetrics>("/metrics"),
 };
