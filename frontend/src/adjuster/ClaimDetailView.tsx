@@ -261,7 +261,7 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
           <WordingReviewPanel
             claimId={claimId}
             // A server mid-deploy may not send it yet; the panel must not take the page down.
-            state={detail.wording_review ?? { status: "none", review: null, error: "", runs: 0 }}
+            state={detail.wording_review ?? { status: "none", running: false, review: null, error: "", runs: 0 }}
             activeTurn={questionTurn}
             onShowTurn={(turnId) => {
               setHighlight(null);

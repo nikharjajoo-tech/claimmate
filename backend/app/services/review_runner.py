@@ -143,22 +143,27 @@ class ReviewRunner:
         except Exception as exc:  # the claim is already submitted; a review failure never undoes that
             logger.exception("wording review failed for %s", claim_id)
             await self.repo.review_fail(claim_id, f"{type(exc).__name__}: {exc}")
+            # No cooldown after a failure: the panel's Retry is the whole point, and refusing it
+            # for a minute would strand the adjuster on an error they cannot clear.
         else:
             await self.repo.review_finish(claim_id, review)
-        finally:
             self._finished_at[claim_id] = self._clock()
 
 
 def review_state_view(state: dict | None, *, running: bool) -> dict:
-    """What the adjuster API returns for the panel (FR-10.6: adjuster call sites only)."""
+    """What the adjuster API returns for the panel (FR-10.6: adjuster call sites only).
+
+    `running` and `status` are separate on purpose. A refresh is scheduled before the row is
+    marked pending, so reporting the stored status alone would hand the adjuster the previous
+    review with nothing to say a new one is on its way. The panel keeps showing the old review
+    and says it is being re-read.
+    """
     if state is None:
-        return {"status": "running" if running else "none", "review": None, "error": "", "runs": 0}
+        return {"status": "none", "running": running, "review": None, "error": "", "runs": 0}
     review: PolicyReview | None = state["review"]
-    status = state["status"]
-    if status == "pending" and not running:
-        status = "pending"  # a restart left it behind; the next open retries it
     return {
-        "status": "running" if running and status != "ready" else status,
+        "status": state["status"],  # pending here means stranded: the next open retries it
+        "running": running,
         "review": review.model_dump(mode="json") if review else None,
         "error": state["error"],
         "runs": state["runs"],

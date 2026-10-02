@@ -175,6 +175,12 @@ def adjuster_router(settings: Settings, store: SessionStore) -> APIRouter:
             raise HTTPException(404, "No such evidence.")
         return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
+    @router.get("/claims/{claim_id}/wording-review", dependencies=[Depends(require_adjuster)])
+    async def get_wording_review(claim_id: str) -> dict[str, Any]:
+        """Just the review, so the panel can follow a generation without refetching the claim."""
+        await store.get_for_adjuster(claim_id)  # 404s on an unknown claim, like every other route
+        return await wording_review(claim_id)
+
     @router.post("/claims/{claim_id}/wording-review/refresh", dependencies=[Depends(require_adjuster)])
     async def refresh_wording_review(claim_id: str) -> dict[str, Any]:
         """Re-read the policy, for example once new documents arrive (FR-10.2).

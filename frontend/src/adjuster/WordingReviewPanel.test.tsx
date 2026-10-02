@@ -1,24 +1,26 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WordingReview, WordingReviewState } from "../lib/adjuster";
 import { REVIEW } from "./fixtures";
 import { WordingReviewPanel } from "./WordingReviewPanel";
 
 const detail = vi.fn();
 const refresh = vi.fn();
+const get = vi.fn();
 vi.mock("../lib/adjuster", async (original) => ({
   ...(await original<typeof import("../lib/adjuster")>()),
   adjusterApi: {
     detail: (...args: unknown[]) => detail(...args),
     packetUrl: (id: string) => `/zip/${id}`,
     refreshWordingReview: (...args: unknown[]) => refresh(...args),
+    wordingReview: (...args: unknown[]) => get(...args),
   },
 }));
 
 const noop = () => undefined;
 
 function panel(state: Partial<WordingReviewState> = {}, review: WordingReview | null = REVIEW) {
-  const full: WordingReviewState = { status: "ready", review, error: "", runs: 1, ...state };
+  const full: WordingReviewState = { status: "ready", running: false, review, error: "", runs: 1, ...state };
   render(
     <WordingReviewPanel claimId="abc" state={full} activeTurn={null} onShowTurn={noop} onUnauthorized={noop} />,
   );
@@ -28,7 +30,9 @@ describe("WordingReviewPanel", () => {
   beforeEach(() => {
     detail.mockReset();
     refresh.mockReset();
+    get.mockReset();
   });
+  afterEach(() => vi.useRealTimers());
 
   it("shows the policy's own words, with the clause it came from", () => {
     panel();
@@ -49,14 +53,54 @@ describe("WordingReviewPanel", () => {
   });
 
   it("explains itself while a review is being prepared", () => {
-    panel({ status: "running", review: null }, null);
+    panel({ status: "none", running: true, review: null }, null);
     expect(screen.getByText("Reading the policy wording…")).toBeInTheDocument();
+    expect(screen.getByRole("button")).toBeDisabled();
   });
 
-  it("offers a retry and the reason when a review failed", () => {
-    panel({ status: "failed", review: null, error: "every model in the chain failed" }, null);
-    expect(screen.getByText(/every model in the chain failed/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  it("keeps the previous review on screen while a new one is prepared", () => {
+    panel({ running: true });
+    expect(screen.getByText("Reading the policy wording again…")).toBeInTheDocument();
+    expect(screen.getByText(/§2.5 Water backup/)).toBeInTheDocument();
+  });
+
+  it("follows a running generation instead of freezing on the old one", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    get.mockResolvedValue({
+      status: "ready",
+      running: false,
+      runs: 2,
+      error: "",
+      review: { ...REVIEW, summary: "A second reading of the policy." },
+    });
+    panel({ running: true });
+    expect(screen.getByText("Reading the policy wording again…")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(2100);
+    await waitFor(() => expect(screen.getByText("A second reading of the policy.")).toBeInTheDocument());
+    expect(screen.queryByText("Reading the policy wording again…")).not.toBeInTheDocument();
+
+    const polls = get.mock.calls.length;
+    await act(async () => void (await vi.advanceTimersByTimeAsync(6000)));
+    expect(get.mock.calls.length).toBe(polls); // stops once it is no longer running
+  });
+
+  it("gives up polling rather than hammering a server that never finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    get.mockResolvedValue({ status: "pending", running: true, runs: 1, error: "", review: null });
+    panel({ status: "pending", running: true, review: null }, null);
+
+    // One step per poll interval: React has to flush between them, or the component never
+    // re-renders and never schedules the next poll.
+    const step = async () => act(async () => void (await vi.advanceTimersByTimeAsync(2100)));
+    for (let i = 0; i < 20; i++) await step();
+    const during = get.mock.calls.length;
+    expect(during).toBeGreaterThan(5); // it kept asking while the server said "running"
+
+    for (let i = 0; i < 30; i++) await step(); // past the 90 s limit
+    const afterLimit = get.mock.calls.length;
+    for (let i = 0; i < 10; i++) await step();
+    expect(get.mock.calls.length).toBe(afterLimit); // and then stopped, rather than asking for ever
   });
 
   it("surfaces the cooldown refusal instead of failing silently", async () => {
@@ -70,6 +114,7 @@ describe("WordingReviewPanel", () => {
   it("replaces the panel with the newly generated review", async () => {
     refresh.mockResolvedValue({
       status: "ready",
+      running: false,
       runs: 2,
       error: "",
       review: { ...REVIEW, summary: "A second reading of the policy." },
@@ -96,7 +141,7 @@ describe("WordingReviewPanel", () => {
   });
 
   it("hides its controls when the feature is switched off", () => {
-    panel({ status: "disabled", review: null }, null);
+    panel({ status: "disabled", running: false, review: null }, null);
     expect(screen.getByText(/not configured on this server/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

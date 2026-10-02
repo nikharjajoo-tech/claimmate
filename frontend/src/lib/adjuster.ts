@@ -30,10 +30,14 @@ export interface WordingReview {
 }
 
 /** "none" = never started, "running" = generating now, "pending" = stranded, retried on open. */
-export type WordingReviewStatus = "none" | "running" | "pending" | "ready" | "failed" | "disabled";
+export type WordingReviewStatus = "none" | "pending" | "ready" | "failed" | "disabled";
 
 export interface WordingReviewState {
+  /** What is stored. "pending" means a generation was stranded; opening the claim retries it. */
   status: WordingReviewStatus;
+  /** Whether one is being generated right now. Separate from status: a refresh keeps showing
+      the previous review while the new one is prepared. */
+  running: boolean;
   review: WordingReview | null;
   error: string;
   runs: number;
@@ -116,6 +120,7 @@ export const adjusterApi = {
   open: (id: string) => post<ClaimDetail>(`/claims/${id}/open`),
   setStatus: (id: string, status: ClaimStatus, note: string) => post<ClaimDetail>(`/claims/${id}/status`, { status, note }),
   override: (id: string, route: Route, reason: string) => post<ClaimDetail>(`/claims/${id}/override`, { route, reason }),
+  wordingReview: (id: string) => call<WordingReviewState>(`/claims/${id}/wording-review`),
   refreshWordingReview: (id: string) => post<WordingReviewState>(`/claims/${id}/wording-review/refresh`),
   packetUrl: (id: string) => `/api/adjuster/claims/${id}/packet.zip`,
   metrics: () => call<OperationsMetrics>("/metrics"),

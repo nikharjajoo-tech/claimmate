@@ -369,3 +369,45 @@ def test_a_failed_review_leaves_the_packet_buildable(tmp_path):
         packet = client.get(f"/api/adjuster/claims/{claim_id}/packet.zip")
     assert packet.status_code == 200
     assert "wording-review.md" not in zipfile.ZipFile(io.BytesIO(packet.content)).namelist()
+
+
+# --- following a generation, and retrying a failure --------------------------
+
+
+def test_retry_is_not_blocked_by_the_cooldown_after_a_failure(tmp_path):
+    """The cooldown exists to stop re-rolling a good review, not to strand an adjuster on an error."""
+    llm = ScriptedLLM(fail=True)
+    app, store, _ = build(tmp_path, review_llm=llm)
+    claim_id = file_claim(app)
+
+    with adjuster_session(app) as client:
+        assert client.get(f"/api/adjuster/claims/{claim_id}/wording-review").json()["status"] == "failed"
+        llm.fail = False  # the model comes back
+        assert client.post(f"/api/adjuster/claims/{claim_id}/wording-review/refresh").status_code == 200
+
+    with adjuster_session(app) as client:
+        assert client.get(f"/api/adjuster/claims/{claim_id}/wording-review").json()["status"] == "ready"
+    assert llm.calls == 2
+
+
+def test_a_refresh_reports_itself_as_running_while_keeping_the_previous_review(tmp_path):
+    """Otherwise the adjuster presses Refresh and sees the old review with nothing happening."""
+    app, store, llm = build(tmp_path, review_llm=ScriptedLLM(delay=0.2))
+    claim_id = file_claim(app)
+
+    with adjuster_session(app) as client:
+        store.reviews._finished_at.clear()
+        body = client.post(f"/api/adjuster/claims/{claim_id}/wording-review/refresh").json()
+        assert body["running"] is True
+        assert body["status"] == "ready"  # the previous one is still shown
+        assert body["review"]["wording_ref"] == "homeowners/v1"
+
+    with adjuster_session(app) as client:
+        settled = client.get(f"/api/adjuster/claims/{claim_id}/wording-review").json()
+    assert settled["running"] is False and settled["status"] == "ready"
+
+
+def test_the_review_endpoint_is_adjuster_only(tmp_path):
+    app, store, llm = build(tmp_path)
+    claim_id = file_claim(app)
+    assert TestClient(app).get(f"/api/adjuster/claims/{claim_id}/wording-review").status_code == 401

@@ -19,7 +19,7 @@ vi.mock("../lib/adjuster", async (original) => ({
 function claim(
   status: ClaimStatus,
   overrides: Partial<ClaimView> = {},
-  wording: WordingReviewState = { status: "ready", review: REVIEW, error: "", runs: 1 },
+  wording: WordingReviewState = { status: "ready", running: false, review: REVIEW, error: "", runs: 1 },
 ): ClaimDetail {
   const state = {
     id: "abcdef123456", revision: 2, up_to_date: true, processing: false, live_connected: false, error: "",

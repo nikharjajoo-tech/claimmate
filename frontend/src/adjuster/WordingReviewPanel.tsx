@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adjusterApi, HttpError, type WordingReviewState } from "../lib/adjuster";
 
 interface Props {
@@ -12,15 +12,45 @@ interface Props {
 
 const WAITING: Partial<Record<WordingReviewState["status"], string>> = {
   none: "No wording review yet. One is prepared when the claim is submitted.",
-  running: "Reading the policy wording…",
   pending: "The last attempt did not finish. Opening the claim starts it again.",
   disabled: "Wording review is not configured on this server.",
 };
+
+/** How often to ask whether a running generation has finished, and when to stop asking.
+    A review is one model call, so this settles in seconds; the cap is for a server that died. */
+const POLL_MS = 2000;
+const POLL_LIMIT_MS = 90_000;
 
 export function WordingReviewPanel({ claimId, state: initial, onShowTurn, activeTurn, onUnauthorized }: Props) {
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const startedPolling = useRef(0);
+  // Drives the poll loop. Re-arming on the state object alone would stop the moment a response
+  // came back reference-identical, because React would skip the re-render.
+  const [poll, setPoll] = useState(0);
+
+  // A generation runs in the background, so the panel follows it rather than freezing on the
+  // review it was rendered with. Without this, pressing Refresh shows the previous review for
+  // ever and the one the adjuster asked for only appears if they reload the page.
+  useEffect(() => {
+    if (!state.running) {
+      startedPolling.current = 0;
+      return;
+    }
+    if (!startedPolling.current) startedPolling.current = Date.now();
+    if (Date.now() - startedPolling.current > POLL_LIMIT_MS) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setState(await adjusterApi.wordingReview(claimId));
+      } catch {
+        // A failed poll is not worth reporting: the next one tries again.
+      }
+      setPoll((n) => n + 1);
+    }, POLL_MS);
+    return () => clearTimeout(timer);
+  }, [claimId, state, poll]);
 
   const refresh = async () => {
     setBusy(true);
@@ -44,8 +74,8 @@ export function WordingReviewPanel({ claimId, state: initial, onShowTurn, active
           AI-assisted · verify against the policy
         </span>
         {state.status !== "disabled" && (
-          <button className="btn btn-small" disabled={busy} onClick={refresh}>
-            {busy ? "Starting…" : state.status === "ready" ? "Refresh" : "Retry"}
+          <button className="btn btn-small" disabled={busy || state.running} onClick={refresh}>
+            {state.running ? "Reading…" : busy ? "Starting…" : state.status === "ready" ? "Refresh" : "Retry"}
           </button>
         )}
       </header>
@@ -55,10 +85,15 @@ export function WordingReviewPanel({ claimId, state: initial, onShowTurn, active
           {error}
         </p>
       )}
-      {state.status === "failed" && (
+      {state.status === "failed" && !state.running && (
         <p className="banner banner-warn">Could not prepare a review: {state.error || "the model was unavailable"}.</p>
       )}
-      {!review && WAITING[state.status] && <p className="muted">{WAITING[state.status]}</p>}
+      {state.running && (
+        <p className="muted" role="status">
+          {review ? "Reading the policy wording again…" : "Reading the policy wording…"}
+        </p>
+      )}
+      {!review && !state.running && WAITING[state.status] && <p className="muted">{WAITING[state.status]}</p>}
 
       {review && (
         <>
