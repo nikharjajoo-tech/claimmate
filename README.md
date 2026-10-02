@@ -24,7 +24,19 @@ Claim pipeline (LangGraph): extract_facts → classify ∥ lookup_policy → rul
    │                                        (Groq gpt-oss or Gemini Flash, with fallback)
    ▼
 Claim notebook in the browser: facts, policy, route, documents, rule findings, next question
+
+On submission, once, for the adjuster only:
+Wording review ──► the product's full policy wording + the claim
+                   ──► clauses that bear on the loss, each quoted from the wording file by code
 ```
+
+**The adjuster's wording review.** ClaimMate reads the whole policy wording when a claim is
+submitted and shows the adjuster the clauses that bear on it, what to check, and the questions the
+claimant asked. It never decides coverage or an amount: the output schema has no field for one. And
+it never writes the quotes — the model cites a clause and anchors a sentence, then code reads that
+sentence out of the wording file, so invented policy text cannot reach an adjuster at all. Measured
+over 16 labelled scenarios: 87.1% clause recall, zero verdicts reaching an adjuster
+([results](docs/04-eval-results.md)).
 
 ## Quick start
 
@@ -91,7 +103,7 @@ python -m app.eval --provider groq --models openai/gpt-oss-120b   # full 50-scen
 
 ```
 backend/
-  app/domain/      claim models, mock policy directory
+  app/domain/      claim models, mock policy directory, policy wordings (wordings/*.md)
   app/rules/       deterministic rules engine + rules.yaml
   app/llm/         Gemini + Groq clients: retries, fallback chain, circuit breaker
   app/pipeline/    LangGraph claim pipeline, prompts, packet builder
@@ -99,7 +111,9 @@ backend/
   app/storage/     SQLAlchemy models, repository, migrations runner (Alembic in migrations/)
   app/live/        Gemini Live config, tools, WebSocket relay
   app/api/         FastAPI app + adjuster API
+  app/review/      wording review: prompt, schema, quote checks, verdict guard
   app/eval/        eval harness; scenarios in eval/scenarios/*.yaml
+                   wording review eval (app/eval/review.py) + eval/review_scenarios/*.yaml
 frontend/src/      React + TypeScript call page and claim notebook
 docs/              PRD, requirements, how it works, workflows, eval results
 ```
@@ -109,6 +123,8 @@ docs/              PRD, requirements, how it works, workflows, eval results
 - [PRD](docs/00-PRD.md): problem, users, metrics, architecture, milestones
 - [How it works](docs/03-how-it-works.md): input → process → output, with a real run
 - [Requirements](docs/02-requirements.md) · [User workflows](docs/05-user-workflows.md) · [Eval results](docs/04-eval-results.md)
+- [Wording review](docs/07-policy-review.md): the adjuster-only policy reading, and why code quotes the policy rather than the model
 
 This is a demo. It does not confirm coverage, liability, or payment, and it has not been reviewed for
-production use with real personal data.
+production use with real personal data. The policy wordings in `backend/app/domain/wordings/` are
+fictional documents written for it, not any insurer's terms.

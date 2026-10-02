@@ -1,8 +1,8 @@
 # Policy Wording Review for Adjusters
 
-> **Status: APPROVED (2026-09-29).** Recorded in the [PRD](00-PRD.md) as feature F13, decision
+> **Status: BUILT (M8 complete, 2026-10-02).** Approved 2026-09-29. Recorded in the [PRD](00-PRD.md) as feature F13, decision
 > D14 (a-f) and milestone M8, and in [02-requirements.md](02-requirements.md) as FR-10. Nothing is
-> built yet; the build starts at step 1 of §7. §9 holds the code-level design decisions taken after
+> built. §7 records how each step went, §10 the manual check that is still outstanding. §9 holds the code-level design decisions taken after
 > reading the current code, and the build follows them.
 
 ## 0. A note on the name
@@ -148,16 +148,16 @@ add about 75K and would break the daily cap if run the same day. The policy-revi
 runs **on its own day**, as a subset run over the labelled scenarios (`python -m app.eval --only
 …`), and the existing pipeline run is unchanged and not re-run for it.
 
-## 7. Build plan (M8)
+## 7. Build plan (M8), as built
 
-| Step | Work |
-|---|---|
-| 1 | `product` key on `PolicyRecord` and all 13 seed records; write the five policy wordings, versioned; wording loader + tests |
-| 2 | Policy review service: prompt, schema, anchor-and-extract quoting (§9.4), verdict-language guard; unit tests with a fake model |
-| 3 | Storage (migration 4) with review status, background generation on submission, lazy retry on adjuster open, Refresh endpoint with the in-flight guard, audit + usage events |
-| 4 | Adjuster panel with question-to-transcript highlighting; packet section; isolation tests proving the claimant endpoints never expose it |
-| 5 | Eval: optional review labels on `Expected` (`backend/app/eval/scenario.py:51`), a second scoring path in `run_eval`/`compute_metrics` for the review service (today they score pipeline output only), labels on ~15 scenarios, new metrics, one subset run on a fresh quota day |
-| 6 | Live agent line for D14d plus a manual live check; docs: PRD (F13, FR-10, D14, M8), workflow 6, README; deploy through CI as usual |
+| Step | Work | Outcome |
+|---|---|---|
+| 1 | `product` key on policy records; five versioned wordings | Done. 13 seed records keyed; wordings are 1,250-1,500 words each, parts carry no body text so only clauses are citable |
+| 2 | Review service: prompt, schema, quoting, verdict guard | Done, with the quoting inverted: see §9.4 |
+| 3 | Storage, triggering, retry, refresh | Done. Migration 4; submission never waits for the model; a restart-stranded review is retried on adjuster open |
+| 4 | Adjuster panel, packet section, isolation tests | Done. The panel follows its own generation; the claimant's view and packet are tested to contain none of it |
+| 5 | Eval labels, metrics, one run | Done. Run WR-1: clause recall 87.1%, question recall 83.3%, zero verdicts through. It changed the verdict guard twice |
+| 6 | Live agent line (D14d), docs, deploy | Prompt line and docs done; the manual live check and the deploy are outstanding (§10) |
 
 ## 8. Settled details (approved 2026-09-29, recorded as D14d-f)
 
@@ -282,3 +282,20 @@ Review calls are recorded like pipeline runs so the operations panel's tokens an
 honest: `operations_metrics` reads `PipelineRunRow`
 (`backend/app/storage/repository.py`), so a review's model, tokens and latency are written in the
 same shape, marked as a policy-review step rather than a pipeline run.
+
+## 10. What is left
+
+**The manual live check (D14d).** The eval scores the pipeline over text transcripts and never
+exercises the live agent's instructions, so the only automated cover for that sentence is
+`tests/test_live_instructions.py`, which checks the text says what the decisions require, not that
+the model obeys it. Someone has to make a real call and ask "am I covered?": the agent should say a
+licensed adjuster decides **and** that the question is noted for them, and must not follow it with a
+view of its own. The question should then appear in the panel in the claimant's own words.
+
+**The travel §2.2 miss.** Every clause miss in run WR-1 was the list of covered reasons for
+cancellation, across all three travel scenarios. The candidate fix is a review prompt v2 telling the
+model to cite the qualifying-reasons clause alongside the cover clause. Under D6 it ships only if it
+beats v1 on this eval.
+
+**Question recall.** 83.3% against a 90% target. Two anchors missed their turn because the model
+paraphrased the question instead of copying its opening words; the same v2 could address it.

@@ -170,9 +170,9 @@ flowchart TD
 
 ---
 
-## 6. Adjuster: review and act on a claim (PROPOSED)
+## 6. Adjuster: review and act on a claim
 
-> Not built yet. This is the proposed scope for **Milestone 6**, for approval.
+> Built in M6. M8 added the wording review described at the end of this section.
 
 ```mermaid
 flowchart TD
@@ -182,7 +182,8 @@ flowchart TD
     R --> R2[Evidence photos + verification]
     R --> R3[Rules fired + audit trail]
     R --> R4[Full transcript]
-    R1 & R2 & R3 & R4 --> D{Decide}
+    R --> R5[Wording review:<br/>clauses, checks, questions]
+    R1 & R2 & R3 & R4 & R5 --> D{Decide}
     D -- agrees --> AC[Accept route]
     D -- disagrees --> OV[Override route<br/>reason required]
     D -- missing items --> RD[Mark awaiting documents]
@@ -208,6 +209,41 @@ stateDiagram-v2
 
 **Queue order:** Emergency → Special investigation → Policy review → Needs documents → Ready for
 adjuster; oldest first within each.
+
+### 6.1 The wording review (M8, feature F13)
+
+Until M8 the adjuster saw what the claimant said and what the declarations page holds, and had to
+open the policy wording themselves. Now, when a claim is submitted, ClaimMate reads the product's
+full wording alongside the claim and prepares a **Wording review** panel on the claim detail page,
+and a `wording-review.md` section in the downloadable packet.
+
+```mermaid
+flowchart LR
+    S[Claim submitted] --> P[Pending row saved]
+    P --> B[Background generation]
+    B --> V{Code checks every item}
+    V -->|anchor matches| K[Quote read from the wording file]
+    V -->|anchor matches nothing| X[Dropped and recorded]
+    K --> A([Panel + packet, adjuster only])
+    A --> RF[Refresh: re-read after new documents]
+```
+
+What the adjuster sees: a short summary, the clauses that bear on this loss with the policy's own
+sentence quoted under each, points to check, and the questions the claimant asked, each of which
+highlights the turn it was asked in.
+
+Three things it deliberately does not do:
+
+- **It never decides the claim.** No "covered", no amount, in code or by AI (D14b). The schema has
+  no field for a verdict, and verdict language in the model's own prose is removed before display.
+- **It never writes the quote.** The model cites a clause and anchors a sentence; code reads that
+  sentence out of the wording file. Invented policy text cannot be displayed at all.
+- **The claimant never sees it** (D14a). It is merged in at the adjuster's endpoints only, and the
+  claimant's own claim view and packet are tested to contain none of it.
+
+The claimant's side of this is one sentence: asked "am I covered?", the agent still says a licensed
+adjuster decides, and adds that it has noted the question for them (D14d). The question then appears
+in the panel, in the claimant's own words.
 
 ---
 
