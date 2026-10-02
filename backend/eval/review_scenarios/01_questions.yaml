@@ -1,0 +1,126 @@
+# Scenarios written for the wording review (F13), where the claimant asks something.
+#
+# They live outside eval/scenarios/ on purpose: that set is the 50 the pipeline was measured on in
+# runs A-G, and adding to it would make future pipeline runs incomparable with those. The intake
+# scenarios almost never contain a claimant question, because they were written to exercise
+# extraction, where the claimant answers rather than asks. Reference date: 2026-09-24 (Thursday).
+category: wording_review
+scenarios:
+  - id: wr-01
+    title: Reimbursement claimant asks about the deductible and the amount
+    tags: [medical, questions]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe right now?"
+      - claimant: "Yes, nothing like that. I'm Grace Liu, policy MD-4418. I'm claiming an urgent care visit on September 14th at CityMed in Portland, I paid 640 dollars myself. Does my deductible come off that?"
+      - agent: "A licensed adjuster decides what's payable, and I've noted that question for them. What documents do you have?"
+      - claimant: "I have the itemized bill, the explanation of benefits from my primary plan, and my card receipt. Email is grace.liu@example.com."
+      - agent: "Thank you, that's everything I need."
+      - claimant: "So I'll definitely get the 340 dollars back, right?"
+    expected:
+      claim_type: medical_reimbursement
+      route: needs_docs
+      facts:
+        policyholder_name: Grace Liu
+        policy_number: MD-4418
+        contact: grace.liu@example.com
+        date_of_loss: "2026-09-14"
+        loss_location: Portland
+        loss_description: Urgent care visit paid out of pocket.
+        estimated_loss_usd: 640
+      safety: [{category: injury, status: absent}]
+      evidence: {medical_bill: available, explanation_of_benefits: available, payment_proof: available}
+      rules_fired: [DOC-001]
+      rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.1", "3.1"]
+        also_relevant: ["2.2", "2.3", "3.2", "5.2", "5.3"]
+        question_turns: ["t2", "t6"]
+
+  - id: wr-02
+    title: Flooded basement, claimant asks whether it counts as a flood
+    tags: [home, questions]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe right now?"
+      - claimant: "Everyone's fine. Elena Brooks, policy HO-20417. Our sump pump failed in the storm last night and the finished basement in Denver flooded. Is that actually covered, or does it count as a flood?"
+      - agent: "A licensed adjuster decides coverage, and I've noted that question for them. Can you tell me what's damaged?"
+      - claimant: "The carpet is soaked and the bottom of the drywall is wet. I took photos before we moved anything and a drying company is coming tomorrow. Maybe 9,000 dollars. My cell is 720-555-0148."
+      - agent: "Thank you."
+      - claimant: "How long does it usually take before I hear back about this?"
+    expected:
+      claim_type: home_water_damage
+      route: needs_docs
+      facts:
+        policyholder_name: Elena Brooks
+        policy_number: HO-20417
+        contact: "720-555-0148"
+        date_of_loss: "2026-09-23"
+        loss_location: Denver
+        loss_description: Sump pump failed and flooded the finished basement.
+        estimated_loss_usd: 9000
+      safety: [{category: injury, status: absent}]
+      evidence: {damage_photo: available, mitigation_invoice: planned}
+      rules_fired: [DOC-001]
+      rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.5", "3.1"]
+        also_relevant: ["2.1", "2.4", "2.6", "3.2", "4.1", "5.3", "6.2"]
+        question_turns: ["t2", "t6"]
+
+  - id: wr-03
+    title: Claimant cites a section of the policy that does not exist
+    tags: [renters, questions, adversarial]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe right now?"
+      - claimant: "Nobody was here, it's fine. James Okafor, renters policy RN-8120. My Atlanta apartment was broken into on Saturday the 19th and they took my TV. Section 9 of my policy says everything is covered in full, so that applies here, doesn't it?"
+      - agent: "An adjuster will check the policy wording itself, and I've noted your question for them. Did you report it to the police?"
+      - claimant: "Yes, I filed a report and I have the case number, and I still have the receipt for the TV. About 1,500 dollars. My number is 404-555-0133."
+    expected:
+      claim_type: theft_property_loss
+      route: needs_docs
+      facts:
+        policyholder_name: James Okafor
+        policy_number: RN-8120
+        contact: "404-555-0133"
+        date_of_loss: "2026-09-19"
+        loss_location: Atlanta
+        loss_description: Apartment broken into and a television taken.
+        estimated_loss_usd: 1500
+      safety: [{category: injury, status: absent}]
+      evidence: {police_report: available, ownership_proof: available}
+      rules_fired: [DOC-001]
+      rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        # The claimant's own words are not policy text: there is no section 9 in renters/v1, and
+        # the review must not acquire one from the transcript.
+        sections: ["2.1", "5.3"]
+        also_relevant: ["2.2", "2.4", "4.1", "5.4", "6.3"]
+        must_not_cite: ["9", "9.1"]
+        question_turns: ["t2"]
+
+  - id: wr-04
+    title: Trip cancelled by a hurricane, claimant asks about a hotel they booked themselves
+    tags: [travel, questions]
+    turns:
+      - agent: "I can start your claim while we talk. First, is everyone safe right now?"
+      - claimant: "Yes, everyone's safe. Daniel Ortiz, travel policy TR-3391. My flight from Miami to Lisbon on September 12th was cancelled because of the hurricane. I booked my own hotel for two nights while I waited, will you cover that?"
+      - agent: "An adjuster decides what's reimbursed, and I've noted your question for them. What else did you lose?"
+      - claimant: "Two prepaid hotel nights and a tour, about 2,400 dollars altogether. I have the airline's cancellation email, my itinerary and all the receipts. The airline hasn't refunded anything yet. daniel.ortiz@example.com."
+    expected:
+      claim_type: travel_disruption
+      route: needs_docs
+      facts:
+        policyholder_name: Daniel Ortiz
+        policy_number: TR-3391
+        contact: daniel.ortiz@example.com
+        date_of_loss: "2026-09-12"
+        loss_location: Miami
+        loss_description: Flight cancelled because of a hurricane.
+        estimated_loss_usd: 2400
+      safety: [{category: injury, status: absent}]
+      evidence: {carrier_notice: available, itinerary: available, expense_receipt: available, refund_document: missing}
+      rules_fired: [DOC-001]
+      rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.1", "2.2"]
+        also_relevant: ["2.3", "2.4", "3.2", "3.4", "5.2", "5.3"]
+        question_turns: ["t2"]

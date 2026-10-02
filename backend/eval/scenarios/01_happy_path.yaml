@@ -28,6 +28,9 @@ scenarios:
       evidence: {damage_photo: available, repair_estimate: planned}
       rules_fired: [DOC-001]
       rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.5", "3.1"]
+        also_relevant: ["2.1", "2.6", "3.2", "4.1", "5.3"]
 
   - id: hp-02
     title: Rear-ended at a light, police came
@@ -76,6 +79,9 @@ scenarios:
         estimated_loss_usd: 1800
       evidence: {police_report: available, ownership_proof: available}
       rules_not_fired: [SAFE-001, POLICY-001, EVID-001]
+      wording_review:
+        sections: ["2.2", "5.3"]
+        also_relevant: ["2.1", "2.4", "4.1", "5.4"]
 
   - id: hp-04
     title: Flight cancelled by hurricane
@@ -99,6 +105,9 @@ scenarios:
         estimated_loss_usd: 2400
       evidence: {carrier_notice: available, expense_receipt: available, refund_document: missing}
       rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.1", "2.2"]
+        also_relevant: ["3.2", "3.4", "5.2", "5.3"]
 
   - id: hp-05
     title: Urgent care reimbursement for an illness
@@ -124,6 +133,9 @@ scenarios:
         estimated_loss_usd: 640
       evidence: {medical_bill: available, payment_proof: available, explanation_of_benefits: missing}
       rules_not_fired: [SAFE-001, POLICY-001]
+      wording_review:
+        sections: ["2.1", "5.3"]
+        also_relevant: ["2.2", "3.1", "3.2", "4.3", "5.2"]
 
   - id: hp-06
     title: Burst pipe, every document captured on camera
@@ -207,3 +219,6 @@ scenarios:
       safety: [{category: injury, status: absent}]
       evidence: {damage_photo: available}
       rules_not_fired: [SAFE-001]
+      wording_review:
+        sections: ["2.2", "4.2"]
+        also_relevant: ["2.1", "4.1", "5.3"]

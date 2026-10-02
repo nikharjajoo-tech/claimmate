@@ -27,6 +27,9 @@ from app.domain.models import (
 from app.pipeline.prompts import Turn
 
 SCENARIO_DIR = Path(__file__).resolve().parents[2] / "eval" / "scenarios"
+# Scenarios written for the wording review alone. They are kept out of SCENARIO_DIR so the
+# 50-scenario pipeline set stays exactly what runs A-G were measured on.
+REVIEW_SCENARIO_DIR = Path(__file__).resolve().parents[2] / "eval" / "review_scenarios"
 DEFAULT_TODAY = date(2026, 9, 24)
 
 
@@ -48,6 +51,20 @@ class GoldSafety(BaseModel):
     status: Literal["present", "absent", "uncertain"]
 
 
+class ReviewLabels(BaseModel):
+    """Gold labels for the wording review (F13), on the scenarios that carry them.
+
+    Two tiers, because relevance is not binary: a clause an adjuster would certainly want is
+    `sections`, and one they would not object to is `also_relevant`. Recall counts the first;
+    precision forgives the second and counts anything else as noise.
+    """
+
+    sections: list[str] = Field(default_factory=list, description="Clauses that must be cited.")
+    also_relevant: list[str] = Field(default_factory=list, description="Acceptable, neither required nor noise.")
+    must_not_cite: list[str] = Field(default_factory=list, description="Citing these is a hard failure.")
+    question_turns: list[str] = Field(default_factory=list, description="Claimant turns whose question must be captured.")
+
+
 class Expected(BaseModel):
     claim_type: ClaimType
     route: Route
@@ -56,6 +73,8 @@ class Expected(BaseModel):
     evidence: dict[DocumentType, EvidenceStatus] = Field(default_factory=dict)
     rules_fired: list[str] = Field(default_factory=list)
     rules_not_fired: list[str] = Field(default_factory=list)
+    # Only on scenarios used by the wording-review eval; absent everywhere else.
+    wording_review: ReviewLabels | None = None
 
     @model_validator(mode="after")
     def _no_received_in_gold(self) -> Expected:

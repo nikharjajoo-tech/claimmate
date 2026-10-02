@@ -67,6 +67,9 @@ scenarios:
         loss_description: Ceiling collapsed from an upstairs leak, soaking furniture.
       safety: [{category: injury, status: absent}, {category: unsafe_housing, status: present}]
       rules_fired: [SAFE-001]
+      wording_review:
+        sections: ["2.1", "2.3"]
+        also_relevant: ["2.5", "4.1", "5.1", "5.2"]
 
   - id: sf-04
     title: Kitchen fire with burns being treated

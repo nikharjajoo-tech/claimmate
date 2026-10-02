@@ -273,13 +273,37 @@ def test_an_empty_summary_is_replaced_too():
     assert reasons(review) == {"empty"}
 
 
-def test_a_clause_reason_that_decides_the_claim_drops_the_whole_clause():
-    """The quote is real, but the reasoning is a verdict, and code cannot rewrite reasoning."""
+def test_a_clause_reason_that_decides_the_claim_costs_the_reason_not_the_clause():
+    """The policy text is the valuable part and is quoted from the file; only the model's line goes.
+
+    Dropping the whole clause was the first design, and the first real eval run showed what it
+    costs: the model cited the two clauses that mattered most and both were thrown away.
+    """
     review = check(draft(clauses=[
         DraftClause(section="2.1", anchor=ANCHOR, why_it_matters="So the $340 balance is covered and payable."),
     ]))
-    assert review.clauses == []
+    assert [c.section for c in review.clauses] == ["2.1"]
+    assert review.clauses[0].quote == WHOLE_SENTENCE  # the adjuster still reads the policy
+    assert "stated a conclusion" in review.clauses[0].why_it_matters
+    assert not has_verdict_language(review.clauses[0].why_it_matters)
     assert reasons(review) == {"verdict_language"}
+
+
+@pytest.mark.parametrize(
+    "why",
+    [
+        # Both of these are real rationales from the first eval run against gpt-oss-120b.
+        "Shows that the loss may be covered under the water backup endorsement, so verify the limit.",
+        "Ensures the loss is not excluded as flood or surface water; confirm the water came from the sump.",
+        "Requires an itemized bill; confirm all three documents were received.",
+        "Sets out the annual deductible that applies before anything is reimbursed.",
+    ],
+)
+def test_a_rationale_that_explains_a_clause_survives(why):
+    """A hedge, or the clause as the subject, is the model deferring to the adjuster, not deciding."""
+    review = check(draft(clauses=[DraftClause(section="2.1", anchor=ANCHOR, why_it_matters=why)]))
+    assert review.clauses[0].why_it_matters == why
+    assert review.dropped == []
 
 
 def test_a_point_to_check_that_decides_the_claim_is_dropped():

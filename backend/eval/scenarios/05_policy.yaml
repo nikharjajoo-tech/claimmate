@@ -21,6 +21,9 @@ scenarios:
       safety: [{category: injury, status: absent}]
       evidence: {damage_photo: available}
       rules_fired: [POLICY-001]
+      wording_review:
+        sections: ["2.2"]
+        also_relevant: ["4.1", "5.1", "6.1"]
 
   - id: po-02
     title: Policy number not in the directory

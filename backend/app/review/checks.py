@@ -36,6 +36,7 @@ from app.domain.wordings import PolicyWording
 # Measured on the five wordings: an anchor is searched inside one clause (280 chars median, not the
 # 33,000-char document), and at 20 characters only 0.38% of sentence openings are ambiguous within
 # their own clause. A claimant turn is shorter still, and real questions are short ("am I covered?").
+REPLACED_REASON = "Cited as relevant; the model's explanation stated a conclusion and was removed."
 MIN_CLAUSE_ANCHOR_CHARS = 20
 MIN_QUESTION_ANCHOR_CHARS = 8
 # An anchor may run past a sentence end; allow it to pull the following sentence with it.
@@ -69,6 +70,19 @@ _VERDICT_UNLESS_OTHER_PAYER = re.compile(
 _BY_OTHER_PAYER = re.compile(
     r"^\s*(by|under)\s+(the\s+|their\s+|her\s+|his\s+)?"
     r"(primary|carrier|another insurer|other insurer)",
+    re.IGNORECASE,
+)
+# A hedge means the model is naming a possibility for the adjuster to resolve, not deciding:
+# "the loss may be covered ... so verify the endorsement" is the single most useful line in a
+# review, and the first real eval run showed the guard destroying exactly those clauses.
+_HEDGED = re.compile(r"\b(may|might|could|appears?|seems?|likely|possibly|potentially|whether)\b", re.IGNORECASE)
+# These rationales are written with the clause as the elliptical subject ("Ensures the loss is not
+# excluded as flood ... confirm the water came from the sump"). That describes the clause's effect;
+# it is not an assertion about the outcome. Only at the start of a sentence, so "the claim is
+# covered, so confirm the deductible" is still caught.
+_ABOUT_THE_CLAUSE = re.compile(
+    r"^\s*(ensures?|shows?|sets out|states?|provides?|means|describes?|defines?|covers?|establishes|"
+    r"requires?|limits?|excludes?|applies|governs?|determines?)\b",
     re.IGNORECASE,
 )
 _SENTENCE = re.compile(r"[^.;!?]+[.;!?]?")
@@ -113,6 +127,8 @@ def has_verdict_language(text: str) -> bool:
     for sentence in _SENTENCE.findall(cleaned):
         if _VERDICT_ALWAYS.search(sentence):
             return True
+        if _HEDGED.search(sentence) or _ABOUT_THE_CLAUSE.match(sentence):
+            continue
         for match in _VERDICT_UNLESS_OTHER_PAYER.finditer(sentence):
             if not _BY_OTHER_PAYER.match(sentence[match.end() :]):
                 return True
@@ -173,9 +189,12 @@ def verify(
         if quote is None:
             drop("clause", "anchor_not_in_section", f"{cited}: {draft_clause.anchor}")
             continue
-        if has_verdict_language(draft_clause.why_it_matters):
-            drop("clause", "verdict_language", f"{cited}: {draft_clause.why_it_matters}")
-            continue
+        why = draft_clause.why_it_matters.strip()
+        if has_verdict_language(why):
+            # Losing the clause would cost the adjuster the policy text, which is the valuable
+            # part and is quoted from the file either way. Only the model's line goes.
+            drop("clause", "verdict_language", f"{cited}: {why}")
+            why = REPLACED_REASON
         if len(review.clauses) >= MAX_CLAUSES:
             drop("clause", "over_limit", cited)
             continue
@@ -186,7 +205,7 @@ def verify(
                 part=clause.part,
                 quote=quote,
                 anchor=draft_clause.anchor.strip(),
-                why_it_matters=draft_clause.why_it_matters.strip(),
+                why_it_matters=why,
             )
         )
 

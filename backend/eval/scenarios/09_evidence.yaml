@@ -91,3 +91,6 @@ scenarios:
         estimated_loss_usd: 1500
       evidence: {carrier_notice: available, itinerary: available, expense_receipt: available, refund_document: available}
       rules_not_fired: [DOC-001, POLICY-001]
+      wording_review:
+        sections: ["2.2", "2.3"]
+        also_relevant: ["2.4", "3.4", "5.2", "5.3"]

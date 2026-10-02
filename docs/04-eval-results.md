@@ -183,6 +183,69 @@ v3 changes only the date rules: the model copies the claimant's words ("Sunday t
   in-02 left a location blank.
 - **Decision D12: v3 is the default.**
 
+## Wording review runs (F13, M8 step 5)
+
+A separate eval with its own scenarios, metrics and targets ([spec](07-policy-review.md) section 6).
+It scores the review against each scenario's **gold** facts rather than the pipeline's output, so a
+missed clause is the review's fault and not fallout from an extraction error, and it costs one model
+call per scenario instead of three.
+
+| Run | Date | Model | Review prompt | Scenarios | Clause recall | Clause precision | Question recall | Verdicts through | Tokens (in/out) |
+|---|---|---|---|---|---|---|---|---|---|
+| WR-1 | 2026-10-02 | groq gpt-oss-120b | v1 | 16 | **87.1%** | 97.8%* | 83.3% ❌ | **0** | 49.0K / 15.5K |
+
+\* Precision was **73.9%** as first scored, and 97.8% after the relevance rule below was added. Both
+are recorded on purpose: the model's answers did not change, the measurement did.
+
+**The labelled set.** Twelve of the 50 intake scenarios carry wording-review labels, plus four
+scenarios written for this feature in `eval/review_scenarios/`. The new ones exist because the
+intake set contains almost no claimant questions: those transcripts were written to exercise
+extraction, where the claimant answers rather than asks, so question recall was unmeasurable on
+them. They are kept in a separate directory so the 50-scenario set stays exactly what runs A-G were
+measured on; only labels were added to it, never a transcript.
+
+**The relevance rule.** Clauses an adjuster checks on any claim, whatever the loss — notice,
+the duty to limit damage, documents owed, and the deductible — count as acceptable citations for
+every scenario. The rule lives in `app/eval/review.py` as a uniform per-product set, not in the
+per-scenario labels, so it cannot be tuned to flatter a run. It is never *enough*: recall still has
+to be earned on the clauses that bear on the particular loss, and a scenario citing only duties
+fails.
+
+**Caveat on the precision figure.** At 97.8% this metric has stopped discriminating: once duties
+and the deductible are acceptable, almost any citation is. It now catches only egregious padding
+(auto §1.1, "the agreement", cited on a parking-garage collision). The honest constraints on
+over-citation are clause recall and the six-clause cap, not this number.
+
+### Findings
+
+- **Every recall miss is travel §2.2**, "Covered reasons for cancellation", across all three travel
+  scenarios. The model cites §2.1 (what we pay) but not the list that decides whether a hurricane or
+  a mechanical cancellation qualifies. On ev-04 it missed the cover clauses altogether and cited only
+  conditions. The travel wording's split between "what we pay" and "what counts" is not being
+  traversed; a v2 prompt should say to cite both when a cover clause depends on a list.
+- **Question recall 83.3%:** one of six labelled questions was lost (wr-04, "I booked my own hotel
+  for two nights while I waited, will you cover that?"). Two question anchors across the run did not
+  match their turn, because the model paraphrased the question instead of copying its opening words.
+- **The anchor mechanism cost 4 clauses out of ~95 cited (~4%)** to `anchor_not_in_section`. That is
+  the measured price of having code quote the policy instead of the model (spec section 9.4); the
+  benefit is that no invented policy text can reach an adjuster at all.
+- **Zero verdicts reached an adjuster**, and zero forbidden citations. The guard caught five
+  rationales that stated conclusions.
+- **The guard was too strict at first, and the run proved it.** On the smoke run it destroyed the two
+  clauses that mattered most on hp-01 (§2.5 water backup, §3.1 flood exclusion) because their
+  rationales read "the loss may be covered ... so verify the endorsement" and "ensures the loss is not
+  excluded ... confirm the water came from the sump". Neither decides anything. Two changes followed:
+  a verdict in a rationale now costs the rationale and not the clause, since the policy text is the
+  valuable part; and hedged wording, or a sentence whose subject is the clause, is no longer read as
+  a verdict. hp-01 went from 50% to 100% clause recall.
+- **The model fills the clause cap**, citing five or six clauses in all 16 scenarios.
+
+### Cost
+
+One review is ~3.1K input and ~1.0K output tokens: ~65K tokens for a 16-scenario run including the
+smoke runs and one retry, against the 200K daily limit for gpt-oss-120b. Three scenarios failed with
+rate-limit errors at concurrency 2 and succeeded on `--resume` at concurrency 1 with a 10 s interval.
+
 ## Known scenario issues (scenario set frozen; to fix in a future set version)
 
 - **ev-03:** "the ice maker line leaked under our Denver fridge" reads oddly; "kitchen" is a defensible

@@ -65,6 +65,9 @@ scenarios:
         estimated_loss_usd: 5000
       safety: [{category: sewage, status: absent}, {category: injury, status: absent}]
       rules_not_fired: [SAFE-001]
+      wording_review:
+        sections: ["2.1", "3.2"]
+        also_relevant: ["2.6", "3.3", "4.1", "5.3"]
 
   - id: ng-04
     title: Burglary while the home was empty
@@ -87,6 +90,9 @@ scenarios:
       safety: [{category: injury, status: absent}]
       evidence: {police_report: available, ownership_proof: available}
       rules_not_fired: [SAFE-001]
+      wording_review:
+        sections: ["2.1", "5.3"]
+        also_relevant: ["2.4", "4.1", "5.4"]
 
   - id: ng-05
     title: Smoke alarm false alarm, the real issue is a leak
