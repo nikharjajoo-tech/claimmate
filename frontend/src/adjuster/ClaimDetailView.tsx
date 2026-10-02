@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ROUTE_LABEL, title } from "../components/Notebook";
 import { adjusterApi, type ClaimDetail, HttpError } from "../lib/adjuster";
+import { type Outcome, decisionFrom, LABEL, noteFor } from "./decision";
 import { WordingReviewPanel } from "./WordingReviewPanel";
 import type { ClaimStatus, Route } from "../lib/types";
 
@@ -13,14 +14,8 @@ interface Props {
 const ACTIONS: Record<ClaimStatus, { status: ClaimStatus; label: string; primary?: boolean }[]> = {
   intake: [],
   submitted: [],
-  in_review: [
-    { status: "awaiting_docs", label: "Request documents" },
-    { status: "closed", label: "Close claim", primary: true },
-  ],
-  awaiting_docs: [
-    { status: "in_review", label: "Resume review" },
-    { status: "closed", label: "Close claim", primary: true },
-  ],
+  in_review: [{ status: "awaiting_docs", label: "Request documents" }],
+  awaiting_docs: [{ status: "in_review", label: "Resume review" }],
   closed: [],
 };
 
@@ -35,6 +30,8 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
   const [highlight, setHighlight] = useState<string | null>(null);
   // A question from the wording review highlights its turn directly, by turn id.
   const [questionTurn, setQuestionTurn] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState<Outcome | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
 
   useEffect(() => {
     adjusterApi.detail(claimId).then(setDetail, (e) => {
@@ -51,6 +48,8 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
       setNote("");
       setOverriding(false);
       setReason("");
+      setDeciding(null);
+      setDecisionReason("");
       onChanged();
     } catch (e) {
       setError(e instanceof HttpError ? e.message : "The action failed. Try again.");
@@ -69,6 +68,7 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
   const sourceTurns = new Set(highlight ? (state.fact_sources[highlight] ?? []) : []);
   if (questionTurn) sourceTurns.add(questionTurn);
   const reviewable = state.status === "in_review" || state.status === "awaiting_docs";
+  const decision = decisionFrom(audit);
 
   return (
     <section className="panel detail" aria-label="Claim detail">
@@ -82,6 +82,13 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
         </div>
         {state.route && <span className={`stamp stamp-${state.route}`}>{ROUTE_LABEL[state.route]}</span>}
       </header>
+
+      {decision && (
+        <p className={`decision decision-${decision.outcome}`} role="status">
+          <strong>{LABEL[decision.outcome]}</strong> by the adjuster on{" "}
+          {new Date(decision.at).toLocaleString()} — {decision.reason}
+        </p>
+      )}
 
       {(state.route_override || (state.route_frozen && state.pipeline_route !== state.route)) && (
         <p className="banner banner-warn">
@@ -124,6 +131,16 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
             {a.label}
           </button>
         ))}
+        {reviewable && !deciding && (
+          <>
+            <button className="btn btn-primary" onClick={() => setDeciding("approved")}>
+              Approve claim
+            </button>
+            <button className="btn btn-danger" onClick={() => setDeciding("denied")}>
+              Deny claim
+            </button>
+          </>
+        )}
         {reviewable && !overriding && (
           <button className="btn" onClick={() => setOverriding(true)}>
             Override route
@@ -135,6 +152,46 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
           </a>
         )}
       </div>
+
+      {deciding && (
+        <form
+          className="override decide"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(() => adjusterApi.setStatus(claimId, "closed", noteFor(deciding, decisionReason)));
+          }}
+        >
+          <label htmlFor="decision-reason">
+            {deciding === "approved" ? "Why this is approved" : "Why this is denied"} (required, recorded in the audit
+            trail)
+          </label>
+          <textarea
+            id="decision-reason"
+            rows={2}
+            autoFocus
+            value={decisionReason}
+            maxLength={900}
+            placeholder={
+              deciding === "approved"
+                ? "e.g. Reimbursable after the $300 annual deductible; all three documents verified."
+                : "e.g. Loss falls outside the policy period on the declarations page."
+            }
+            onChange={(e) => setDecisionReason(e.target.value)}
+          />
+          <div className="row">
+            <button
+              className={`btn ${deciding === "approved" ? "btn-primary" : "btn-danger"}`}
+              type="submit"
+              disabled={busy || decisionReason.trim().length < 10}
+            >
+              {deciding === "approved" ? "Approve and close" : "Deny and close"}
+            </button>
+            <button className="btn" type="button" onClick={() => setDeciding(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {overriding && (
         <form

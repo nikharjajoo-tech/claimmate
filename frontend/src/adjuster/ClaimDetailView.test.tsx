@@ -55,7 +55,10 @@ describe("ClaimDetailView", () => {
     detail.mockResolvedValue(claim("in_review"));
     render(<ClaimDetailView claimId="abcdef123456" onChanged={noop} onUnauthorized={noop} />);
     expect(await screen.findByText("Request documents")).toBeInTheDocument();
-    expect(screen.getByText("Close claim")).toBeInTheDocument();
+    // Closing a claim now says what was decided, so the bare "Close claim" button is gone.
+    expect(screen.getByText("Approve claim")).toBeInTheDocument();
+    expect(screen.getByText("Deny claim")).toBeInTheDocument();
+    expect(screen.queryByText("Close claim")).not.toBeInTheDocument();
     expect(screen.getByText("Override route")).toBeInTheDocument();
     expect(screen.queryByText("Start review")).not.toBeInTheDocument();
   });
@@ -103,6 +106,37 @@ describe("ClaimDetailView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /I'm Elena Brooks/ }));
     expect(factRow).not.toHaveClass("active");
+  });
+
+  it("requires a reason before a claim can be approved", async () => {
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    fireEvent.click(await screen.findByText("Approve claim"));
+
+    const confirm = screen.getByRole("button", { name: "Approve and close" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: /Why this is approved/ }), {
+      target: { value: "Reimbursable after the $300 deductible." },
+    });
+    expect(confirm).toBeEnabled();
+  });
+
+  it("shows the decision once the claim has been closed with one", async () => {
+    detail.mockResolvedValue({
+      ...claim("closed"),
+      audit: [
+        {
+          at: "2026-10-02T12:00:00Z",
+          actor: "adjuster",
+          action: "status_changed",
+          detail: "in_review -> closed: Approved — Reimbursable after the $300 deductible.",
+        },
+      ],
+    });
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveTextContent("Approved for payment");
+    expect(banner).toHaveTextContent("Reimbursable after the $300 deductible.");
   });
 
   it("explains an override", async () => {

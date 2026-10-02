@@ -280,6 +280,12 @@ button, input, select, textarea { font-family: inherit; }
 .actor-agent { color: var(--warn); }
 .actor-system, .actor-claimant { color: var(--muted); }
 
+/* ---- adjuster decision (interim: stored as the closing note until it gets a column) ---- */
+.decision { margin: 0 0 12px; padding: 12px 16px; border-radius: 12px; font-size: 0.92rem; }
+.decision-approved { background: var(--ok-bg); color: var(--ok); }
+.decision-denied { background: var(--danger-bg); color: var(--danger); }
+.decide textarea { min-height: 52px; }
+
 /* ---- wording review (F13): adjuster-only, quoted from the policy file ---- */
 .wording-review { background: var(--surface-2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
 .wording-review header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
