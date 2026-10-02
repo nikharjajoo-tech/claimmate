@@ -214,6 +214,20 @@ button, input, select, textarea { font-family: inherit; }
 .signin input, .override select, .override textarea, .note-input, .filters select {
   font-size: 0.93rem; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--outline); background: transparent; color: var(--ink);
 }
+/* One chevron, drawn by us: the native control puts its own arrow at a width-dependent offset,
+   so a row of selects ends up with the mark floating at a different distance in each. */
+.override select, .filters select {
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23444746' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 12px 8px;
+  padding-right: 38px; cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  .override select, .filters select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23c4c7c5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
+.override select option, .filters select option { background: var(--panel); color: var(--ink); }
 .signin input:focus, .override select:focus, .override textarea:focus, .note-input:focus, .filters select:focus {
   outline: none; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent);
 }
@@ -222,8 +236,9 @@ button, input, select, textarea { font-family: inherit; }
 
 .queue { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 110px); overflow-y: auto; }
 .queue-head h2 { margin-bottom: 12px; }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.filters select { font-size: 0.85rem; padding: 6px 10px; }
+/* Equal columns, so the three filters line up instead of each sizing to its own longest option. */
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.filters select { font-size: 0.85rem; padding: 8px 32px 8px 12px; background-position: right 10px center; width: 100%; }
 .queue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .queue-item {
   width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; display: grid; gap: 4px;
