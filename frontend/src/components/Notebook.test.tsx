@@ -89,3 +89,13 @@ describe("Notebook", () => {
     expect(screen.getByAltText("Water line on drywall.")).toHaveAttribute("src", "/api/claims/c1/evidence/a");
   });
 });
+
+it("shows the policy's spelling of a name with what was heard beneath it", () => {
+  const heard = {
+    ...base,
+    fields: [{ key: "policyholder_name", label: "Name", value: "Grace Liu", note: "heard “Grace Lee”" }],
+  };
+  render(<Notebook claim={heard} tools={[]} />);
+  expect(screen.getByText("Grace Liu")).toBeInTheDocument();
+  expect(screen.getByText("heard “Grace Lee”")).toBeInTheDocument();
+});

@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from app.domain.models import ClaimFacts
-from app.domain.policy_store import lookup_policy, normalize_policy_number, policy_issues
+from app.domain.policy_store import lookup_policy, names_match, normalize_policy_number, policy_issues
 
 
 @pytest.mark.parametrize(
@@ -67,3 +67,48 @@ def test_period_bounds_are_inclusive():
     assert record.effective_start == date(2026, 1, 1)
     assert policy_issues(_facts(date_of_loss="2026-01-01"), lookup_policy("HO-20417")) == []
     assert policy_issues(_facts(date_of_loss="2026-12-31"), lookup_policy("HO-20417")) == []
+
+
+# --- names as they are heard (2026-10-04) ------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("spoken", "recorded"),
+    [
+        ("Grace Lee", "Grace Liu"),        # speech-to-text, the case that prompted this
+        ("Omar Hadad", "Omar Haddad"),     # a spelled-out name heard one letter short (co-04)
+        ("Grayce Liu", "Grace Liu"),
+        ("Elena Smyth", "Elena Smith"),
+        ("Elena M Brooks", "Elena Brooks"),  # a middle name the record does not carry
+        ("elena  brooks.", "Elena Brooks"),
+    ],
+)
+def test_the_same_name_heard_imperfectly_still_matches(spoken, recorded):
+    assert names_match(spoken, recorded)
+
+
+@pytest.mark.parametrize(
+    ("spoken", "recorded"),
+    [
+        ("Rachel Stone", "Elena Brooks"),  # po-05: someone else's policy
+        ("John Smith", "Jane Smith"),      # same sound, different person
+        ("Liu", "Grace Liu"),              # a partial name is not a match
+        ("Daniel Ortiz", "Grace Liu"),
+        ("Elena Brooks", "Elena Brooksworth"),
+    ],
+)
+def test_a_different_person_is_still_caught(spoken, recorded):
+    assert not names_match(spoken, recorded)
+
+
+def test_a_mis_heard_name_no_longer_sends_an_honest_claim_to_policy_review():
+    """Before this, "Grace Lee" against a policy reading "Grace Liu" fired POLICY-001."""
+    facts = _facts(policyholder_name="Grace Lee", policy_number="MD-4418", date_of_loss="2026-09-14")
+    assert policy_issues(facts, lookup_policy("MD-4418")) == []
+
+
+def test_the_name_check_still_fires_for_someone_elses_policy():
+    facts = _facts(policyholder_name="Rachel Stone")
+    assert "Claimant name does not match the policyholder on record." in policy_issues(
+        facts, lookup_policy("HO-20417")
+    )

@@ -45,7 +45,10 @@ export function Notebook({ claim, tools }: { claim: ClaimView | null; tools: Too
         {claim.fields.map((f) => (
           <div key={f.key} className={f.value ? "filled" : "missing"}>
             <dt>{f.label}</dt>
-            <dd>{f.value ?? "Not yet"}</dd>
+            <dd>
+              {f.value ?? "Not yet"}
+              {f.note && <span className="field-note">{f.note}</span>}
+            </dd>
           </div>
         ))}
         <div className={claim.estimated_loss_usd != null ? "filled" : "missing"}>

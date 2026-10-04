@@ -244,7 +244,10 @@ export function ClaimDetailView({ claimId, onChanged, onUnauthorized }: Props) {
                 }}
               >
                 <dt>{f.label}</dt>
-                <dd>{f.value ?? "Not provided"}</dd>
+                <dd>
+                  {f.value ?? "Not provided"}
+                  {f.note && <span className="field-note">{f.note}</span>}
+                </dd>
               </div>
             ))}
           </dl>

@@ -185,6 +185,70 @@ def _name_key(name: str) -> str:
     return re.sub(r"[^a-z]", "", name.lower())
 
 
+def _tokens(name: str) -> list[str]:
+    return [part for part in (re.sub(r"[^a-z]", "", t) for t in str(name or "").lower().split()) if part]
+
+
+def _soundex(word: str) -> str:
+    """Classic Soundex: first letter plus three consonant codes, vowels dropped.
+
+    Speech-to-text confuses names that sound alike, which is exactly what Soundex equates:
+    "Liu" and "Lee" are both L000.
+    """
+    codes = {**dict.fromkeys("bfpv", "1"), **dict.fromkeys("cgjkqsxz", "2"), **dict.fromkeys("dt", "3"),
+             "l": "4", **dict.fromkeys("mn", "5"), "r": "6"}
+    if not word:
+        return ""
+    out, previous = word[0].upper(), codes.get(word[0], "")
+    for char in word[1:]:
+        code = codes.get(char, "")
+        if code and code != previous:
+            out += code
+        if char not in "hw":  # h and w are transparent: they do not break a repeat
+            previous = code
+    return (out + "000")[:4]
+
+
+def _distance(a: str, b: str) -> int:
+    """Levenshtein distance, iterative and small; no dependency worth adding for this."""
+    if a == b:
+        return 0
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        current = [i]
+        for j, cb in enumerate(b, start=1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
+        previous = current
+    return previous[-1]
+
+
+def _close(spoken: str, recorded: str) -> bool:
+    """Same name, heard imperfectly.
+
+    Both tests must pass. Soundex alone is too generous for given names ("John" and "Jane" are
+    both J500); edit distance alone would equate short unrelated names. Together they accept
+    Lee/Liu (same sound, two edits) and reject John/Jane (same sound, three edits).
+    """
+    return spoken == recorded or (_soundex(spoken) == _soundex(recorded) and _distance(spoken, recorded) <= 2)
+
+
+def names_match(spoken: str, recorded: str) -> bool:
+    """Whether the caller's name is the policyholder's, allowing for how it was heard.
+
+    An exact-letter comparison treats a transcription slip as a possible impostor: it reported
+    "Grace Lee" against a policy reading "Grace Liu" with the same confidence as a different
+    person entirely, which sent honest claims to policy review.
+    """
+    said, record = _tokens(spoken), _tokens(recorded)
+    if _name_key(spoken) == _name_key(recorded):
+        return True
+    if len(said) < 2 or len(record) < 2:
+        # A partial name ("Liu" alone) is not accepted as a match; the whole name is still asked for.
+        return _close(_name_key(spoken), _name_key(recorded))
+    # Middle names come and go, so only the first and last are compared.
+    return _close(said[0], record[0]) and _close(said[-1], record[-1])
+
+
 def policy_issues(facts: ClaimFacts, lookup: PolicyLookup) -> list[str]:
     """Reasons the policy needs human review. Empty list means the policy checks out.
 
@@ -204,6 +268,6 @@ def policy_issues(facts: ClaimFacts, lookup: PolicyLookup) -> list[str]:
                 issues.append("Loss date falls outside the policy period.")
         except ValueError:
             pass  # Date validation (INTAKE-002) reports unparseable dates.
-    if not is_blank(facts.policyholder_name) and _name_key(facts.policyholder_name) != _name_key(record.policyholder_name):
+    if not is_blank(facts.policyholder_name) and not names_match(facts.policyholder_name, record.policyholder_name):
         issues.append("Claimant name does not match the policyholder on record.")
     return issues

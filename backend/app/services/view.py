@@ -6,6 +6,7 @@ from dataclasses import asdict
 from typing import Any
 
 from app.domain.models import is_blank
+from app.domain.policy_store import names_match
 from app.services.sessions import ClaimSession
 
 FIELD_LABELS = {
@@ -16,6 +17,24 @@ FIELD_LABELS = {
     "loss_location": "Location",
     "loss_description": "What happened",
 }
+
+
+def _field(key: str, label: str, facts: Any, policy: Any) -> dict[str, Any]:
+    """One row of the claim notebook.
+
+    The policyholder's name is shown as the declarations page spells it, once the policy has been
+    verified and the spoken name matches it. Speech-to-text hears "Grace Lee" for "Grace Liu", and
+    the record is authoritative for spelling. What the claimant actually said is kept beside it
+    rather than overwritten: only their words are facts, and a reviewer should see both.
+    """
+    value = None if is_blank(getattr(facts, key)) else getattr(facts, key)
+    row: dict[str, Any] = {"key": key, "label": label, "value": value}
+    if key == "policyholder_name" and value and policy is not None and policy.found and policy.record:
+        recorded = policy.record.policyholder_name
+        if recorded != value and names_match(value, recorded):
+            row["value"] = recorded
+            row["note"] = f"heard “{value}”"
+    return row
 
 
 def session_view(session: ClaimSession, *, evidence_url_prefix: str | None = None) -> dict[str, Any]:
@@ -75,10 +94,7 @@ def session_view(session: ClaimSession, *, evidence_url_prefix: str | None = Non
         claim_type=result.classification.claim_type.value,
         severity=result.classification.severity.value,
         rationale=result.classification.rationale,
-        fields=[
-            {"key": k, "label": label, "value": None if is_blank(getattr(facts, k)) else getattr(facts, k)}
-            for k, label in FIELD_LABELS.items()
-        ],
+        fields=[_field(k, label, facts, policy) for k, label in FIELD_LABELS.items()],
         estimated_loss_usd=facts.estimated_loss_usd,
         safety=[s.model_dump() for s in facts.safety_facts],
         checklist=[

@@ -82,7 +82,9 @@ export interface ClaimView {
   claim_type: string | null;
   severity: string | null;
   rationale: string;
-  fields: { key: string; label: string; value: string | null }[];
+  // `note` appears when the value was taken from the policy record, e.g. a name that
+  // speech-to-text heard differently. It carries what the claimant actually said.
+  fields: { key: string; label: string; value: string | null; note?: string }[];
   estimated_loss_usd: number | null;
   safety: { category: string; status: "present" | "absent" | "uncertain"; description: string }[];
   checklist: { label: string; status: string; satisfied: boolean; reason: string }[];

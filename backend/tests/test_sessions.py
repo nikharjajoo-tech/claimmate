@@ -156,3 +156,19 @@ async def test_view_before_and_after_pipeline():
                               "line": "Homeowners (HO-3)", "status": "active"}
     assert view["fields"][0] == {"key": "policyholder_name", "label": "Name", "value": "Elena Brooks"}
     assert view["next_question"].startswith("Do you have the")
+
+
+def test_the_notebook_shows_the_policys_spelling_and_what_was_heard():
+    """A verified policy is authoritative for spelling; the claimant's words are kept beside it."""
+    from app.domain.models import ClaimFacts
+    from app.domain.policy_store import lookup_policy
+    from app.services.view import _field
+
+    heard = _field("policyholder_name", "Name", ClaimFacts(policyholder_name="Grace Lee"), lookup_policy("MD-4418"))
+    assert heard["value"] == "Grace Liu"
+    assert "Grace Lee" in heard["note"]
+
+    # A genuine mismatch is never rewritten: the adjuster must see what was actually said.
+    other = _field("policyholder_name", "Name", ClaimFacts(policyholder_name="Rachel Stone"), lookup_policy("HO-20417"))
+    assert other["value"] == "Rachel Stone"
+    assert "note" not in other
