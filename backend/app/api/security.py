@@ -33,13 +33,20 @@ SECURITY_HEADERS = {
 }
 
 MAX_EVIDENCE_BODY = 2_200_000  # base64 JPEG under 1.5 MB, plus JSON overhead
+MAX_EVIDENCE_BATCH_BODY = 12_000_000  # several browser-resized photos; the client splits larger sets
 MAX_API_BODY = 64_000
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path.startswith("/api/") and request.method in {"POST", "PUT", "PATCH"}:
-            limit = MAX_EVIDENCE_BODY if request.url.path.endswith("/evidence") else MAX_API_BODY
+            path = request.url.path
+            if path.endswith("/evidence/batch"):
+                limit = MAX_EVIDENCE_BATCH_BODY
+            elif path.endswith("/evidence"):
+                limit = MAX_EVIDENCE_BODY
+            else:
+                limit = MAX_API_BODY
             length = request.headers.get("content-length")
             if length is None or not length.isdigit():
                 return PlainTextResponse("A Content-Length header is required.", status_code=411)

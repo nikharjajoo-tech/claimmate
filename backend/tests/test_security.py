@@ -43,6 +43,13 @@ def test_oversized_bodies_are_rejected_before_parsing(client):
     big_photo = client.post(f"/api/claims/{claim_id}/evidence", content=b"x" * 2_300_000,
                             headers={"content-type": "application/json"})
     assert big_photo.status_code == 413
+    # the batch endpoint allows several photos, still bounded
+    batch = client.post(f"/api/claims/{claim_id}/evidence/batch", content=b"x" * 2_300_000,
+                        headers={"content-type": "application/json"})
+    assert batch.status_code == 422  # past the size gate, fails only as bad JSON
+    big_batch = client.post(f"/api/claims/{claim_id}/evidence/batch", content=b"x" * 12_100_000,
+                            headers={"content-type": "application/json"})
+    assert big_batch.status_code == 413
 
 
 def test_claim_creation_is_rate_limited_per_client(client):

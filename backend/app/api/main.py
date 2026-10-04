@@ -53,6 +53,13 @@ class EvidenceIn(BaseModel):
     claim: str = Field(default="", max_length=500)
 
 
+MAX_BATCH_PHOTOS = 10
+
+
+class EvidenceBatchIn(BaseModel):
+    photos: list[EvidenceIn] = Field(min_length=1, max_length=MAX_BATCH_PHOTOS)
+
+
 class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     id: str | None = Field(default=None, max_length=64)
@@ -233,6 +240,50 @@ def create_app(
         session.add_turn("agent", f"Thanks, I've added that photo. I can see: {result.capture.caption}")
         await store.save(session)
         return {"id": claim_id, "capture": summary, "state": session_view(session)}
+
+    @app.post("/api/claims/{claim_id}/evidence/batch", status_code=201)
+    async def upload_evidence_batch(claim_id: str, body: EvidenceBatchIn, request: Request) -> dict[str, Any]:
+        """Several photos at once. Each is verified on its own; the pipeline runs once for the set.
+
+        One bad photo does not fail the others: every photo gets its own result, in request order.
+        """
+        session = await store.get(claim_id, owner_of(request))
+        vision_llm = get_vision()
+        if vision_llm is None:
+            raise HTTPException(503, "Photo verification is not configured on the server.")
+        results: list[dict[str, Any]] = []
+        added = []
+        for photo in body.photos:
+            try:
+                image = base64.b64decode(photo.data, validate=True)
+            except (binascii.Error, ValueError):
+                results.append({"ok": False, "error": "Image must be base64."})
+                continue
+            try:
+                result = await verify_and_record(session, vision_llm, image, claimant_claim=photo.claim, source="upload")
+            except SessionError as exc:
+                if session.deleted:
+                    raise
+                results.append({"ok": False, "error": str(exc)})  # e.g. not a JPEG, or the evidence limit
+                continue
+            except Exception:
+                logger.exception("evidence verification failed")
+                results.append({"ok": False, "error": "Photo verification is unavailable right now. Try again shortly."})
+                continue
+            added.append(result.capture)
+            results.append({"ok": True, "capture": capture_summary(result.capture)})
+        if added:
+            try:
+                await service.refresh(session)
+            except Exception:
+                logger.exception("pipeline failed after evidence upload")
+            if len(added) == 1:
+                session.add_turn("agent", f"Thanks, I've added that photo. I can see: {added[0].caption}")
+            else:
+                seen = " ".join(f"({i}) {capture.caption}" for i, capture in enumerate(added, 1))
+                session.add_turn("agent", f"Thanks, I've added those {len(added)} photos. I can see: {seen}")
+            await store.save(session)
+        return {"id": claim_id, "results": results, "state": session_view(session)}
 
     @app.get("/api/claims/{claim_id}/evidence/{capture_id}")
     async def get_evidence(claim_id: str, capture_id: str, request: Request) -> Response:

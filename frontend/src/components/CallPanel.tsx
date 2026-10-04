@@ -16,7 +16,8 @@ interface Props {
   onSend: (text: string) => void;
   onCamera: () => void;
   onCapture: () => void;
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
+  uploading: { done: number; total: number } | null;
 }
 
 const STATUS_TEXT: Record<CallStatus, string> = {
@@ -28,7 +29,7 @@ const STATUS_TEXT: Record<CallStatus, string> = {
 
 export function CallPanel(props: Props) {
   const { transcript, call, busy, micOn, submitted, onNewClaim, cameraOn, videoRef, onStart, onEnd, onSend, onCamera,
-    onCapture, onUpload } = props;
+    onCapture, onUpload, uploading } = props;
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -87,16 +88,17 @@ export function CallPanel(props: Props) {
           </button>
         )}
         <button className="btn btn-small" onClick={() => fileRef.current?.click()} disabled={busy}>
-          Upload photo
+          Upload photos
         </button>
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           hidden
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file);
+            const files = Array.from(e.target.files ?? []);
+            if (files.length) onUpload(files);
             e.target.value = "";
           }}
         />
@@ -113,7 +115,13 @@ export function CallPanel(props: Props) {
         {busy && (
           <li className="turn turn-agent partial">
             <span className="who">Agent</span>
-            <p>Updating your claim…</p>
+            <p>
+              {!uploading || uploading.total < 2
+                ? "Updating your claim…"
+                : uploading.done
+                  ? `Checking your photos (${uploading.done} of ${uploading.total} done)…`
+                  : `Checking your ${uploading.total} photos…`}
+            </p>
           </li>
         )}
         <div ref={endRef} />

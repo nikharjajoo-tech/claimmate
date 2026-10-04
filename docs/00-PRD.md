@@ -242,6 +242,7 @@ All tools are **non-blocking**, so the agent keeps talking while they run.
 | GET | `/api/claims/{id}` | Claim state (facts, route, checklist, evidence) |
 | POST | `/api/claims/{id}/messages` | Typed turn (non-live fallback) ✅ |
 | POST | `/api/claims/{id}/evidence` | Upload a photo; verified like a capture ✅ |
+| POST | `/api/claims/{id}/evidence/batch` | Upload up to 10 photos; each verified on its own, one claim update and one agent reply for the set ✅ |
 | GET | `/api/claims/{id}/evidence/{capture_id}` | Evidence image (owner only) ✅ |
 | GET | `/api/claims/{id}/packet` | Export packet (Markdown today; ZIP with photos in M6) ✅ |
 | WS | `/ws/claims/{id}/live` | Live audio/video/text relay ✅ |

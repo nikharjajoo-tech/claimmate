@@ -4,7 +4,7 @@ import { CallPanel } from "./components/CallPanel";
 import { Notebook } from "./components/Notebook";
 import { api, LiveConnection } from "./lib/api";
 import { AudioPlayer, MicCapture } from "./lib/audio";
-import { CameraStream, fileToJpegBase64 } from "./lib/camera";
+import { batchPhotos, CameraStream, fileToJpegBase64 } from "./lib/camera";
 import { initialState, reducer } from "./lib/state";
 import type { ServerMessage } from "./lib/types";
 
@@ -41,6 +41,7 @@ export default function App() {
   const camera = useRef<CameraStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
 
   const loadClaim = useCallback(async (resume: boolean) => {
     try {
@@ -176,16 +177,52 @@ export default function App() {
 
   const capturePhoto = () => live.current?.send({ type: "capture", claim: "" });
 
-  const uploadPhoto = async (file: File) => {
+  // Photos go up in batches, one batch at a time: the server verifies each photo on its own but
+  // updates the claim once per batch, and parallel requests would race on the same claim.
+  // A photo that fails does not stop the rest.
+  const uploadPhotos = async (files: File[]) => {
     if (!claimId) return;
     dispatch({ type: "busy", busy: true });
+    setUploading({ done: 0, total: files.length });
+    const failed: string[] = [];
+    let reason = "";
+    const fail = (name: string, message: string) => {
+      failed.push(name);
+      reason ||= message;
+    };
     try {
-      const result = await api.uploadEvidence(claimId, await fileToJpegBase64(file), "");
-      dispatch({ type: "claim", claim: result.state });
-      dispatch({ type: "error", error: "" });
-    } catch (e) {
-      dispatch({ type: "error", error: `Photo upload failed. ${(e as Error).message}` });
+      const photos: { name: string; data: string; claim: string }[] = [];
+      for (const file of files) {
+        try {
+          photos.push({ name: file.name, data: await fileToJpegBase64(file), claim: "" });
+        } catch {
+          fail(file.name, "That file could not be read as an image.");
+        }
+      }
+      let done = files.length - photos.length;
+      for (const batch of batchPhotos(photos)) {
+        setUploading({ done, total: files.length });
+        try {
+          const result = await api.uploadEvidenceBatch(
+            claimId,
+            batch.map(({ data, claim }) => ({ data, claim })),
+          );
+          result.results.forEach((r, i) => r.ok || fail(batch[i].name, r.error ?? "Upload failed."));
+          dispatch({ type: "claim", claim: result.state });
+        } catch (e) {
+          batch.forEach((p) => fail(p.name, (e as Error).message));
+        }
+        done += batch.length;
+      }
+      if (!failed.length) dispatch({ type: "error", error: "" });
+      else if (files.length === 1) dispatch({ type: "error", error: `Photo upload failed. ${reason}` });
+      else
+        dispatch({
+          type: "error",
+          error: `${failed.length} of ${files.length} photos failed (${failed.join(", ")}). ${reason}`,
+        });
     } finally {
+      setUploading(null);
       dispatch({ type: "busy", busy: false });
     }
   };
@@ -257,7 +294,8 @@ export default function App() {
           onSend={send}
           onCamera={toggleCamera}
           onCapture={capturePhoto}
-          onUpload={uploadPhoto}
+          onUpload={uploadPhotos}
+          uploading={uploading}
         />
         <Notebook claim={state.claim} tools={state.tools} />
       </main>

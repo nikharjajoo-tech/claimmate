@@ -3,6 +3,9 @@
 export const FRAME_INTERVAL_MS = 1000;
 const FRAME_MAX_WIDTH = 640;
 const UPLOAD_MAX_SIDE = 1280;
+// Mirror the server: at most 10 photos per batch, and a body under its 12 MB cap with room for JSON.
+export const BATCH_MAX_PHOTOS = 10;
+export const BATCH_MAX_CHARS = 10_000_000;
 
 export function stripDataUrl(dataUrl: string): string {
   const comma = dataUrl.indexOf(",");
@@ -57,4 +60,26 @@ export async function fileToJpegBase64(file: File): Promise<string> {
   canvas.getContext("2d")?.drawImage(bitmap, 0, 0, size.width, size.height);
   bitmap.close();
   return stripDataUrl(canvas.toDataURL("image/jpeg", 0.8));
+}
+
+/** Splits base64 photos, in order, into batches the batch endpoint accepts. */
+export function batchPhotos<T extends { data: string }>(
+  photos: T[],
+  maxPhotos = BATCH_MAX_PHOTOS,
+  maxChars = BATCH_MAX_CHARS,
+): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let chars = 0;
+  for (const photo of photos) {
+    if (current.length && (current.length >= maxPhotos || chars + photo.data.length > maxChars)) {
+      batches.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(photo);
+    chars += photo.data.length;
+  }
+  if (current.length) batches.push(current);
+  return batches;
 }

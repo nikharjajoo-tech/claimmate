@@ -223,6 +223,48 @@ def test_upload_verify_and_serve_evidence(client):
     assert client.get(item["url"]).status_code == 404
 
 
+def test_batch_upload_verifies_each_photo_and_answers_once(client):
+    claim = client.post("/api/claims").json()
+    client.post(f"/api/claims/{claim['id']}/messages", json={"text": "Basement flooded"})
+    turns_before = len(client.get(f"/api/claims/{claim['id']}").json()["state"]["transcript"])
+    photos = [{"data": b64(JPEG), "claim": "water damage"}, {"data": b64(b"GIF89a....")}, {"data": b64(JPEG)}]
+    response = client.post(f"/api/claims/{claim['id']}/evidence/batch", json={"photos": photos})
+    assert response.status_code == 201
+    body = response.json()
+    assert [r["ok"] for r in body["results"]] == [True, False, True]  # the bad one fails alone, in order
+    assert "JPEG" in body["results"][1]["error"]
+    assert [e["source"] for e in body["state"]["evidence"]] == ["upload", "upload"]
+    transcript = body["state"]["transcript"]
+    assert len(transcript) == turns_before + 1  # one agent turn for the whole set
+    assert transcript[-1]["text"].startswith("Thanks, I've added those 2 photos")
+
+
+def test_batch_upload_reports_the_evidence_limit_per_photo(client, monkeypatch):
+    monkeypatch.setattr(evidence_module, "MAX_CAPTURES", 1)
+    claim = client.post("/api/claims").json()
+    response = client.post(f"/api/claims/{claim['id']}/evidence/batch",
+                           json={"photos": [{"data": b64(JPEG)}, {"data": b64(JPEG)}]})
+    results = response.json()["results"]
+    assert results[0]["ok"] and not results[1]["ok"] and "limit" in results[1]["error"]
+    assert response.json()["state"]["transcript"][-1]["text"].startswith("Thanks, I've added that photo")
+
+
+def test_batch_upload_rejects_empty_and_oversized_sets(client):
+    claim = client.post("/api/claims").json()
+    url = f"/api/claims/{claim['id']}/evidence/batch"
+    assert client.post(url, json={"photos": []}).status_code == 422
+    assert client.post(url, json={"photos": [{"data": b64(JPEG)}] * 11}).status_code == 422
+
+
+def test_batch_upload_with_nothing_accepted_adds_no_turn(client):
+    claim = client.post("/api/claims").json()
+    before = client.get(f"/api/claims/{claim['id']}").json()["state"]["transcript"]
+    response = client.post(f"/api/claims/{claim['id']}/evidence/batch", json={"photos": [{"data": "***"}]})
+    assert response.status_code == 201
+    assert response.json()["results"] == [{"ok": False, "error": "Image must be base64."}]
+    assert response.json()["state"]["transcript"] == before
+
+
 def test_upload_rejects_bad_images(client):
     claim = client.post("/api/claims").json()
     url = f"/api/claims/{claim['id']}/evidence"
