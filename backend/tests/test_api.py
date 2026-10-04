@@ -63,6 +63,7 @@ def client(tmp_path):
     )
     with TestClient(app) as c:
         yield c
+    asyncio.run(engine.dispose())  # close what this test opened, so threads do not pile up
 
 
 def new_claim(client):

@@ -46,7 +46,10 @@ def make_engine(url: str, *, turso_auth_token: str = "", pooled: bool = True) ->
             return create_async_engine(pg_url, connect_args=connect_args, poolclass=NullPool)
         # Serverless Postgres (Neon) suspends idle databases and drops connections: check before use.
         return create_async_engine(pg_url, connect_args=connect_args, pool_pre_ping=True, pool_recycle=300)
-    engine = create_async_engine(url)
+    # NullPool for SQLite too: a pooled aiosqlite connection keeps a worker thread alive until the
+    # engine is disposed, and a test suite that builds an app per test and never disposes leaves
+    # dozens of them. The loop then stalls cancelling tasks bound to them when it closes.
+    engine = create_async_engine(url) if pooled else create_async_engine(url, poolclass=NullPool)
     if url.startswith("sqlite"):
 
         @event.listens_for(engine.sync_engine, "connect")

@@ -21,7 +21,9 @@ def make_test_engine(tmp_path: Path, name: str = "test.db"):
     if USE_TURSO:
         env = {**dotenv_values(Path(__file__).resolve().parents[2] / ".env"), **os.environ}
         return make_engine(env["TURSO_DATABASE_URL"], turso_auth_token=env["TURSO_AUTH_TOKEN"])
-    return make_engine(f"sqlite+aiosqlite:///{tmp_path / name}")
+    # Unpooled: these engines are rarely disposed, and a pooled one would hold a connection, and
+    # its worker thread, for the rest of the run.
+    return make_engine(f"sqlite+aiosqlite:///{tmp_path / name}", pooled=False)
 
 
 _remote_schema_ready = False
