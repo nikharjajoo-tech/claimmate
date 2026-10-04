@@ -9,7 +9,7 @@ Let a claimant report an insurance loss by **talking** (optionally showing their
 agent runs the conversation, while a background pipeline turns it into a **structured, verified,
 routed claim** that a human adjuster can review in a dashboard.
 
-**Success criteria (measurable, resume-ready):**
+**Success criteria (measurable):**
 - Voice response latency (end of user speech → first agent audio) p50 < 1.5 s
 - Field extraction F1 ≥ 0.90 on the eval scenario set
 - Routing accuracy ≥ 90%; safety-escalation recall = 100% on eval scenarios
