@@ -12,6 +12,7 @@ export default function AdjusterApp() {
   const [selected, setSelected] = useState<string | null>(null);
   const [queueVersion, setQueueVersion] = useState(0);
   const [tab, setTab] = useState<"claims" | "operations">("claims");
+  const [queueOpen, setQueueOpen] = useState(true);
 
   const check = useCallback(async () => {
     try {
@@ -78,12 +79,14 @@ export default function AdjusterApp() {
       {auth === "signed_out" && <SignIn onSignedIn={() => setAuth("signed_in")} />}
       {auth === "signed_in" && tab === "operations" && <OperationsPanel onUnauthorized={onUnauthorized} />}
       {auth === "signed_in" && tab === "claims" && (
-        <main className="layout review">
+        <main className={`layout review${queueOpen ? "" : " queue-collapsed"}`}>
           <QueueView
             selected={selected}
             onSelect={setSelected}
             version={queueVersion}
             onUnauthorized={onUnauthorized}
+            collapsed={!queueOpen}
+            onToggle={() => setQueueOpen((open) => !open)}
           />
           {selected ? (
             <ClaimDetailView

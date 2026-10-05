@@ -18,11 +18,19 @@ vi.mock("../lib/adjuster", async (original) => ({
 }));
 
 const noop = () => undefined;
+const changed = vi.fn();
 
 function panel(state: Partial<WordingReviewState> = {}, review: WordingReview | null = REVIEW) {
   const full: WordingReviewState = { status: "ready", running: false, review, error: "", runs: 1, ...state };
   render(
-    <WordingReviewPanel claimId="abc" state={full} activeTurn={null} onShowTurn={noop} onUnauthorized={noop} />,
+    <WordingReviewPanel
+      claimId="abc"
+      state={full}
+      activeTurn={null}
+      onShowTurn={noop}
+      onChange={changed}
+      onUnauthorized={noop}
+    />,
   );
 }
 
@@ -31,6 +39,7 @@ describe("WordingReviewPanel", () => {
     detail.mockReset();
     refresh.mockReset();
     get.mockReset();
+    changed.mockReset();
   });
   afterEach(() => vi.useRealTimers());
 
@@ -39,17 +48,14 @@ describe("WordingReviewPanel", () => {
     expect(screen.getByText(/§2.5 Water backup and sump overflow endorsement/)).toBeInTheDocument();
     expect(screen.getByText(/whether or not the backup or overflow was caused by a mechanical breakdown/)).toBeInTheDocument();
     expect(screen.getByText("The claimant describes a sump pump failure.")).toBeInTheDocument();
+    // The summary is shown with the claim, above the tabs, not repeated here.
+    expect(screen.queryByText(REVIEW.summary)).not.toBeInTheDocument();
     expect(screen.getByText(/Wording homeowners\/v1/)).toBeInTheDocument();
   });
 
   it("always carries the caveat that an adjuster decides", () => {
     panel();
     expect(screen.getByText("AI-assisted · verify against the policy")).toBeInTheDocument();
-  });
-
-  it("says when the model's summary was replaced for deciding the claim", () => {
-    panel({}, { ...REVIEW, summary_replaced: true });
-    expect(screen.getByText(/stated a coverage conclusion/)).toBeInTheDocument();
   });
 
   it("explains itself while a review is being prepared", () => {
@@ -71,7 +77,7 @@ describe("WordingReviewPanel", () => {
       running: false,
       runs: 2,
       error: "",
-      review: { ...REVIEW, summary: "A second reading of the policy." },
+      review: { ...REVIEW, points_to_check: ["A second reading of the policy."] },
     });
     panel({ running: true });
     expect(screen.getByText("Reading the policy wording again…")).toBeInTheDocument();
@@ -117,11 +123,13 @@ describe("WordingReviewPanel", () => {
       running: false,
       runs: 2,
       error: "",
-      review: { ...REVIEW, summary: "A second reading of the policy." },
+      review: { ...REVIEW, points_to_check: ["A second reading of the policy."] },
     });
     panel();
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(screen.getByText("A second reading of the policy.")).toBeInTheDocument());
+    // The claim view shows the summary from whatever the panel last loaded.
+    await waitFor(() => expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ runs: 2 })));
   });
 
   it("says nothing was matched rather than showing an empty list", () => {

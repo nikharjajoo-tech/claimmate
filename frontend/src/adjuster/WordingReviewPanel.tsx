@@ -7,6 +7,8 @@ interface Props {
   /** Highlights the transcript turn a question was asked in; null clears it. */
   onShowTurn: (turnId: string | null) => void;
   activeTurn: string | null;
+  /** Called with every state the panel moves to, so the claim summary elsewhere stays current. */
+  onChange?: (state: WordingReviewState) => void;
   onUnauthorized: (e: unknown) => void;
 }
 
@@ -21,7 +23,7 @@ const WAITING: Partial<Record<WordingReviewState["status"], string>> = {
 const POLL_MS = 2000;
 const POLL_LIMIT_MS = 90_000;
 
-export function WordingReviewPanel({ claimId, state: initial, onShowTurn, activeTurn, onUnauthorized }: Props) {
+export function WordingReviewPanel({ claimId, state: initial, onShowTurn, activeTurn, onChange, onUnauthorized }: Props) {
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -51,6 +53,8 @@ export function WordingReviewPanel({ claimId, state: initial, onShowTurn, active
     }, POLL_MS);
     return () => clearTimeout(timer);
   }, [claimId, state, poll]);
+
+  useEffect(() => onChange?.(state), [state, onChange]);
 
   const refresh = async () => {
     setBusy(true);
@@ -101,14 +105,6 @@ export function WordingReviewPanel({ claimId, state: initial, onShowTurn, active
             {review.wording_ref ? `Wording ${review.wording_ref}` : "No wording: the policy could not be verified"}
             {review.policy_number && ` · policy ${review.policy_number} (${review.policy_status})`}
           </p>
-
-          <h4>Summary</h4>
-          <p>{review.summary}</p>
-          {review.summary_replaced && (
-            <p className="muted small">
-              The model's own summary stated a coverage conclusion, so this one was built from the claim facts instead.
-            </p>
-          )}
 
           <h4>Relevant clauses</h4>
           {review.clauses.length === 0 ? (

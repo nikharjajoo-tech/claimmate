@@ -86,6 +86,9 @@ button, input, select, textarea { font-family: inherit; }
 
 /* ---- app bar ---- */
 .app { max-width: 1240px; margin: 0 auto; padding: 8px 16px 32px; }
+/* A review workstation: use the whole screen. */
+.app.adjuster { max-width: none; padding-inline: 24px; }
+@media (max-width: 480px) { .app.adjuster { padding-inline: 16px; } }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 64px; margin-bottom: 8px; }
 .brand { display: flex; align-items: center; gap: 12px; font-size: 1.35rem; font-weight: 500; }
 .brand .muted { font-size: 0.95rem; font-weight: 400; }
@@ -206,8 +209,14 @@ button, input, select, textarea { font-family: inherit; }
 .disclaimer { margin: 20px 0 0; font-size: 0.78rem; color: var(--muted); }
 
 /* ---- adjuster review ---- */
-.layout.review { grid-template-columns: minmax(270px, 350px) minmax(0, 1fr); }
-@media (max-width: 860px) { .layout.review { grid-template-columns: 1fr; } }
+.layout.review { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
+.layout.review.queue-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
+/* One column on a phone: minmax(0, …) so wide content scrolls inside its card instead of the page,
+   and the queue scrolls away rather than sitting on top of the claim. */
+@media (max-width: 860px) {
+  .layout.review, .layout.review.queue-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .layout.review .queue { position: static; max-height: 50vh; }
+}
 .narrow { max-width: 420px; margin: 48px auto; }
 .signin { display: flex; flex-direction: column; gap: 12px; }
 .signin label, .override label { font-size: 0.85rem; color: var(--muted); }
@@ -235,25 +244,40 @@ button, input, select, textarea { font-family: inherit; }
 .empty-detail { display: grid; place-items: center; min-height: 240px; text-align: center; }
 
 .queue { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 110px); overflow-y: auto; }
-.queue-head h2 { margin-bottom: 12px; }
+.queue-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.icon-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none; padding: 0; border-radius: 50%;
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.queue.collapsed { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0; overflow: hidden; }
+.rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.87rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
+@media (max-width: 860px) {
+  .queue.collapsed { flex-direction: row; padding: 8px 16px; }
+  .rail-label { writing-mode: horizontal-tb; transform: none; }
+}
 /* Equal columns, so the three filters line up instead of each sizing to its own longest option. */
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 8px; margin-bottom: 12px; }
 .filters select { font-size: 0.85rem; padding: 8px 32px 8px 12px; background-position: right 10px center; width: 100%; }
 .queue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .queue-item {
   width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; display: grid; gap: 4px;
-  padding: 12px 14px; border-radius: 12px; border: 0; border-left: 4px solid var(--line); background: transparent;
+  padding: 8px 12px; border-radius: 12px; border: 0; border-left: 4px solid var(--line); background: transparent;
 }
 .queue-item:hover { background: var(--surface-2); }
 .queue-item.selected { background: var(--accent-soft); color: var(--accent-soft-ink); }
 .queue-item.route-emergency_escalation { border-left-color: var(--danger); }
 .queue-item.route-special_investigation, .queue-item.route-policy_review, .queue-item.route-needs_docs { border-left-color: var(--warn); }
 .queue-item.route-ready_for_adjuster { border-left-color: var(--ok); }
-.qi-top { display: flex; justify-content: space-between; gap: 8px; }
-.qi-top strong { font-weight: 500; }
-.qi-meta { font-size: 0.87rem; }
-.qi-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8rem; text-transform: capitalize; }
-.pill { font-size: 0.75rem; font-weight: 500; padding: 2px 10px; border-radius: 8px; background: var(--surface-3); color: var(--muted); text-transform: capitalize; }
+.qi-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
+.qi-top strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qi-age { flex: none; font-size: 0.8rem; opacity: 0.75; }
+/* Status, route and type on one line; the text gives way first so the pill never wraps. */
+.qi-meta { display: flex; gap: 6px; align-items: center; min-width: 0; font-size: 0.82rem; }
+.qi-meta .pill { flex: none; }
+.qi-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qi-type { opacity: 0.75; }
+.pill { white-space: nowrap; font-size: 0.75rem; font-weight: 500; padding: 2px 10px; border-radius: 8px; background: var(--surface-3); color: var(--muted); text-transform: capitalize; }
 .pill-submitted { background: var(--accent-soft); color: var(--accent-soft-ink); }
 .pill-in_review, .pill-awaiting_docs { background: var(--warn-bg); color: var(--warn); }
 .pill-closed { background: var(--ok-bg); color: var(--ok); }
@@ -264,12 +288,51 @@ button, input, select, textarea { font-family: inherit; }
 .note-input { flex: 1 1 220px; min-width: 0; font-size: 0.87rem; }
 .override { display: grid; gap: 8px; padding: 16px; background: var(--surface-2); border-radius: 12px; margin-bottom: 16px; }
 .override .row { display: flex; gap: 8px; }
-.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
-@media (max-width: 1100px) { .detail-grid { grid-template-columns: 1fr; } }
+/* Claim workspace beside a transcript that stays in view; the split itself is decided in ClaimDetailView. */
+.detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.detail.split { grid-template-columns: minmax(0, 1fr) minmax(340px, 0.55fr); }
+.transcript-pane { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); height: calc(100vh - 110px); display: flex; flex-direction: column; }
+.transcript-pane h3 { margin: 0 0 8px; }
+.transcript-pane .review-transcript { min-height: 0; }
+.tabpanel .review-transcript { max-height: 70vh; }
+.overview-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 24px; }
+
+.glance { display: grid; gap: 8px; margin-bottom: 8px; }
+.glance-summary { display: grid; gap: 6px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); }
+.glance-summary p { margin: 0; }
+.glance-label { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.glance-label .caveat { text-transform: none; letter-spacing: 0; }
+.glance-severity { text-transform: capitalize; font-weight: 500; }
+/* Flex, not grid: a short last row stretches across instead of leaving an empty cell. */
+.glance-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.glance-stats .stat { flex: 1 1 140px; }
+.stat {
+  display: grid; gap: 2px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: transparent;
+}
+.stat:hover { border-color: var(--outline); }
+.stat-label { font-size: 0.78rem; color: var(--muted); }
+.stat-value { font-weight: 500; }
+.stat-ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.stat-warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.stat-danger { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+.stat-ok .stat-label, .stat-warn .stat-label, .stat-danger .stat-label { color: inherit; opacity: 0.8; }
+
+/* M3 primary tabs */
+.tabs { display: flex; gap: 4px; margin: 16px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab {
+  display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.92rem; font-weight: 500; white-space: nowrap;
+  padding: 10px 16px; margin-bottom: -1px; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.tab:hover { background: var(--surface-2); color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-count { font-size: 0.75rem; padding: 0 8px; border-radius: 8px; background: var(--surface-3); color: var(--muted); }
+.tabpanel > h3:first-child { margin-top: 0; }
 .hint { margin: -4px 0 8px; font-size: 0.8rem; }
 .plain-list { margin: 0; padding-left: 18px; font-size: 0.9rem; display: grid; gap: 4px; }
 .danger-text { color: var(--danger); }
-.review-transcript { max-height: 420px; }
+.review-transcript { position: relative; } /* offsetTop of a turn is measured from the list, to scroll it into view */
 .turn.source { box-shadow: 0 0 0 2px var(--accent); }
 .audit { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 0.85rem; }
 .audit li { display: grid; grid-template-columns: 9.5rem 5.5rem 1fr; gap: 8px; align-items: baseline; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
@@ -289,7 +352,6 @@ button, input, select, textarea { font-family: inherit; }
 .decide textarea { min-height: 52px; }
 
 /* ---- wording review (F13): adjuster-only, quoted from the policy file ---- */
-.wording-review { background: var(--surface-2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
 .wording-review header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .wording-review h3 { margin: 0; }
 .wording-review h4 { margin: 14px 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }

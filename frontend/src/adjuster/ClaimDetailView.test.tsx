@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClaimDetail, WordingReviewState } from "../lib/adjuster";
 import { REVIEW } from "./fixtures";
 import type { ClaimStatus, ClaimView } from "../lib/types";
@@ -45,11 +45,22 @@ function claim(
 
 const noop = () => undefined;
 
+/** jsdom has no matchMedia, which the view reads as a wide screen; this makes it a narrow one. */
+function narrowScreen() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: noop,
+    removeEventListener: noop,
+  }));
+}
+
 describe("ClaimDetailView", () => {
   beforeEach(() => {
     detail.mockReset();
     refresh.mockReset();
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("offers review actions only when the claim is in review", async () => {
     detail.mockResolvedValue(claim("in_review"));
@@ -91,6 +102,7 @@ describe("ClaimDetailView", () => {
     const turn = (await screen.findByText("I'm Elena Brooks.")).closest("li")!;
     expect(turn).not.toHaveClass("source");
 
+    fireEvent.click(screen.getByRole("tab", { name: "Policy wording" }));
     fireEvent.click(screen.getByRole("button", { name: /I'm Elena Brooks/ }));
     expect(turn).toHaveClass("source");
   });
@@ -104,8 +116,51 @@ describe("ClaimDetailView", () => {
     const factRow = screen.getByText("Elena Brooks", { selector: "dd" }).closest("div")!;
     expect(factRow).toHaveClass("active");
 
+    fireEvent.click(screen.getByRole("tab", { name: "Policy wording" }));
     fireEvent.click(screen.getByRole("button", { name: /I'm Elena Brooks/ }));
     expect(factRow).not.toHaveClass("active");
+  });
+
+  it("leads with the summary and keeps policy wording and the audit trail in their own tabs", async () => {
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    expect(await screen.findByText(REVIEW.summary)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: /Transcript/ })).not.toBeInTheDocument(); // it has its own column
+    expect(screen.queryByText("claim created")).not.toBeVisible();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Audit trail/ }));
+    expect(screen.getByText("claim created")).toBeVisible();
+    expect(screen.getByText("Facts")).not.toBeVisible();
+  });
+
+  it("opens the policy wording from the count of points to check", async () => {
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    fireEvent.click(await screen.findByRole("button", { name: /To check/ }));
+    expect(screen.getByRole("tab", { name: "Policy wording" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("says when the model's summary was replaced", async () => {
+    detail.mockResolvedValue(
+      claim("in_review", {}, { status: "ready", running: false, review: { ...REVIEW, summary_replaced: true }, error: "", runs: 1 }),
+    );
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    expect(await screen.findByText(/stated a coverage conclusion/)).toBeInTheDocument();
+  });
+
+  it("on a narrow screen, opens the transcript tab at the turn a fact came from", async () => {
+    narrowScreen();
+    detail.mockResolvedValue(claim("in_review"));
+    render(<ClaimDetailView claimId="a" onChanged={noop} onUnauthorized={noop} />);
+    const tab = await screen.findByRole("tab", { name: /Transcript/ });
+    const turn = screen.getByText("I'm Elena Brooks.").closest("li")!;
+    expect(turn).not.toBeVisible();
+
+    fireEvent.click(screen.getByText("Elena Brooks", { selector: "dd" }));
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(turn).toBeVisible();
+    expect(turn).toHaveClass("source");
   });
 
   it("requires a reason before a claim can be approved", async () => {
