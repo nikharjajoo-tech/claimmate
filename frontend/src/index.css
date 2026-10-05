@@ -319,10 +319,16 @@ button, input, select, textarea { font-family: inherit; }
 .stat-ok .stat-label, .stat-warn .stat-label, .stat-danger .stat-label { color: inherit; opacity: 0.8; }
 
 /* M3 primary tabs */
-.tabs { display: flex; gap: 4px; margin: 16px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+/* The divider is an inset shadow, not a border the tabs overlap: an overlap makes the row 1px taller
+   than its box, and a scrolling row then shows a scrollbar. Tabs still swipe sideways on a phone. */
+.tabs {
+  display: flex; gap: 4px; margin: 16px 0; box-shadow: inset 0 -1px 0 var(--line);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
   display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.92rem; font-weight: 500; white-space: nowrap;
-  padding: 10px 16px; margin-bottom: -1px; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0;
+  padding: 10px 16px; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0;
   background: transparent; color: var(--muted); cursor: pointer;
 }
 .tab:hover { background: var(--surface-2); color: var(--ink); }
