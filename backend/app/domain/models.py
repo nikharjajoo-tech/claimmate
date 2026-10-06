@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 NOT_SPECIFIED = "not specified"
 _BLANK = {"", "unknown", NOT_SPECIFIED, "unspecified", "n/a", "none", "not provided"}
@@ -149,6 +149,15 @@ class EvidenceCapture(BaseModel):
 
 # --- Policy ------------------------------------------------------------------
 
+# Every policy number starts with its product's code, e.g. HO-20417 is a homeowners policy.
+_PRODUCT_BY_PREFIX = {
+    "HO": Product.HOMEOWNERS,
+    "RN": Product.RENTERS,
+    "AU": Product.AUTO,
+    "TR": Product.TRAVEL,
+    "MD": Product.MEDICAL,
+}
+
 
 class PolicyRecord(BaseModel):
     policy_number: str
@@ -161,6 +170,17 @@ class PolicyRecord(BaseModel):
     deductibles: dict[str, int] = Field(default_factory=dict)
     coverages: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _product_for_older_records(cls, data: Any) -> Any:
+        """Claims stored before records carried a product (2026-09-29) have only the policy number.
+        Without this the whole claim fails to load, and the adjuster cannot open it."""
+        if isinstance(data, dict) and "product" not in data:
+            product = _PRODUCT_BY_PREFIX.get(str(data.get("policy_number", "")).split("-", 1)[0].upper())
+            if product is not None:
+                data = {**data, "product": product}
+        return data
 
 
 class PolicyLookup(BaseModel):

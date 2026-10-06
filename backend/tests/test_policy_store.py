@@ -1,8 +1,11 @@
+import json
 from datetime import date
 
 import pytest
 
-from app.domain.models import ClaimFacts
+from pydantic import ValidationError
+
+from app.domain.models import ClaimFacts, PolicyRecord, Product
 from app.domain.policy_store import lookup_policy, names_match, normalize_policy_number, policy_issues
 
 
@@ -112,3 +115,39 @@ def test_the_name_check_still_fires_for_someone_elses_policy():
     assert "Claimant name does not match the policyholder on record." in policy_issues(
         facts, lookup_policy("HO-20417")
     )
+
+
+# A record as stored before policies carried a product (2026-09-29), e.g. Marcus Webb's auto claim.
+_OLDER_RECORD = {
+    "policy_number": "AU-55830",
+    "policyholder_name": "Marcus Webb",
+    "policy_line": "Personal auto",
+    "status": "active",
+    "effective_start": "2026-04-01",
+    "effective_end": "2026-10-01",
+}
+
+
+@pytest.mark.parametrize(
+    ("number", "product"),
+    [
+        ("HO-20417", Product.HOMEOWNERS),
+        ("RN-7702", Product.RENTERS),
+        ("AU-55830", Product.AUTO),
+        ("TR-3391", Product.TRAVEL),
+        ("MD-4418", Product.MEDICAL),
+    ],
+)
+def test_a_record_stored_before_products_still_loads(number, product):
+    stored = json.dumps({**_OLDER_RECORD, "policy_number": number})  # the JSON a claim row holds
+    assert PolicyRecord.model_validate_json(stored).product is product
+
+
+def test_a_stored_product_is_never_replaced_by_the_guess():
+    record = PolicyRecord.model_validate({**_OLDER_RECORD, "product": "renters"})
+    assert record.product is Product.RENTERS
+
+
+def test_an_unknown_prefix_still_fails_rather_than_guessing():
+    with pytest.raises(ValidationError):
+        PolicyRecord.model_validate({**_OLDER_RECORD, "policy_number": "ZZ-1"})
